@@ -1,0 +1,19 @@
+# Generated data and caches never go in git (ADR-003)
+.data/
+web/public/data/
+web/dist/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+
+# Local env and OS noise
+.env
+.env.*
+.DS_Store
