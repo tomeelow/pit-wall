@@ -1,59 +1,80 @@
-import numpy as np
+from typing import Any
+
 import pandas as pd
 import pytest
 
-from pitwall.ingest.fastf1_race import canonical_laps, canonical_results
+from pitwall.ingest.openf1 import canonical_laps, canonical_results
 from pitwall.ingest.storage import EventInfo, RaceTables
 
+DRIVERS = {
+    1: ("VER", "Red Bull Racing"),
+    16: ("LEC", "Ferrari"),
+    2: ("SAR", "Williams"),
+}
 
-def fastf1_laps(driver: str, team: str, stints: list[tuple[str, int, int]]) -> pd.DataFrame:
-    """A FastF1-shaped `Laps` frame. Each stint is (compound, laps, tyre_life_at_start)."""
-    rows = []
-    lap = 1
-    for stint_no, (compound, n_laps, life_at_start) in enumerate(stints, start=1):
-        for i in range(n_laps):
-            rows.append(
+
+def openf1_race(
+    plans: dict[int, list[tuple[str, int, int]]],
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """OpenF1-shaped laps, stints and drivers. Each stint is (compound, laps, tyre_age_at_start).
+    The last stint of each driver has lap_end None, as OpenF1 sometimes reports."""
+    laps: list[dict[str, Any]] = []
+    stints: list[dict[str, Any]] = []
+    for number, plan in plans.items():
+        lap = 1
+        for stint_no, (compound, n_laps, age_at_start) in enumerate(plan, start=1):
+            last = stint_no == len(plan)
+            stints.append(
                 {
-                    "Driver": driver,
-                    "Team": team,
-                    "LapNumber": float(lap),
-                    "LapTime": pd.Timedelta(seconds=95 + 0.05 * i),
-                    "Compound": compound,
-                    "TyreLife": float(life_at_start + i + 1),
-                    "Stint": float(stint_no),
-                    "Position": 1.0,
-                    "PitInTime": pd.Timedelta(minutes=lap) if i == n_laps - 1 else None,
-                    "PitOutTime": pd.Timedelta(minutes=lap) if i == 0 and stint_no > 1 else None,
-                    "TrackStatus": "1",
+                    "driver_number": number,
+                    "stint_number": stint_no,
+                    "compound": compound,
+                    "lap_start": lap,
+                    "lap_end": None if last else lap + n_laps - 1,
+                    "tyre_age_at_start": age_at_start,
                 }
             )
-            lap += 1
-    frame = pd.DataFrame(rows)
-    for column in ("PitInTime", "PitOutTime"):
-        frame[column] = pd.to_timedelta(frame[column])
-    return frame
+            for i in range(n_laps):
+                laps.append(
+                    {
+                        "driver_number": number,
+                        "lap_number": lap,
+                        "lap_duration": None if lap == 1 else 95 + 0.05 * i,
+                        "is_pit_out_lap": i == 0 and stint_no > 1,
+                    }
+                )
+                lap += 1
+    drivers = pd.DataFrame(
+        [
+            {"driver_number": n, "name_acronym": code, "team_name": team}
+            for n, (code, team) in DRIVERS.items()
+            if n in plans
+        ]
+    )
+    return pd.DataFrame(laps), pd.DataFrame(stints), drivers
 
 
 @pytest.fixture
 def race_tables() -> RaceTables:
-    raw_laps = pd.concat(
-        [
-            fastf1_laps("VER", "Red Bull Racing", [("MEDIUM", 20, 0), ("HARD", 37, 0)]),
-            fastf1_laps("LEC", "Ferrari", [("SOFT", 15, 3), ("HARD", 25, 0), ("SOFT", 17, 2)]),
-            fastf1_laps("SAR", "Williams", [("HARD", 30, 0)]),
-        ],
-        ignore_index=True,
-    )
-    raw_results = pd.DataFrame(
+    laps, stints, drivers = openf1_race(
         {
-            "Abbreviation": ["SAR", "LEC", "VER"],
-            "TeamName": ["Williams", "Ferrari", "Red Bull Racing"],
-            "Position": [np.nan, 2.0, 1.0],
-            "Status": ["Retired", "Finished", "Finished"],
+            1: [("MEDIUM", 20, 0), ("HARD", 37, 0)],
+            16: [("SOFT", 15, 3), ("HARD", 25, 0), ("SOFT", 17, 2)],
+            2: [("HARD", 30, 0)],
+        }
+    )
+    results = pd.DataFrame(
+        {
+            "driver_number": [2, 16, 1],
+            "position": [None, 2, 1],
+            "number_of_laps": [30, 57, 57],
+            "dnf": [True, False, False],
+            "dns": [False, False, False],
+            "dsq": [False, False, False],
         }
     )
     return RaceTables(
         event=EventInfo(season=2024, round=1, name="Test Grand Prix", total_laps=57),
-        laps=canonical_laps(raw_laps, season=2024, round_=1),
-        results=canonical_results(raw_results),
+        laps=canonical_laps(laps, stints, drivers, season=2024, round_=1),
+        results=canonical_results(results, drivers),
     )

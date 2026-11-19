@@ -2,6 +2,7 @@ import type { Race, Stint } from "../contract/race";
 
 const LABEL_WIDTH = 44;
 const PLOT_WIDTH = 900;
+const RIGHT_PAD = 16; // room for the last lap label, which is centred on the plot edge
 const ROW_HEIGHT = 20;
 const BAR_HEIGHT = 14;
 const AXIS_HEIGHT = 24;
@@ -23,7 +24,7 @@ export function StintChart({ race }: { race: Race }) {
   return (
     <svg
       className="stint-chart"
-      viewBox={`0 0 ${LABEL_WIDTH + PLOT_WIDTH} ${height}`}
+      viewBox={`0 0 ${LABEL_WIDTH + PLOT_WIDTH + RIGHT_PAD} ${height}`}
       role="img"
       aria-label={`Tyre strategies, ${race.name} ${race.season}`}
     >

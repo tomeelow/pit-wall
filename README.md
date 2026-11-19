@@ -32,18 +32,10 @@ make setup
 make verify
 ```
 
-### Data access
+### Data
 
-FastF1 reads the F1 live-timing archive, which requires an active F1TV Access (or higher)
-subscription (see
-[ADR-006](docs/adr/006-fastf1-with-f1-account.md)). Sign in once; FastF1 stores the token outside
-this repository:
-
-```bash
-cd pipeline && uv run python -m fastf1 auth f1tv --authenticate
-```
-
-Then ingest a race, export the bundle and run the app:
+Race data comes from [OpenF1](https://openf1.org) (free, no key, 2023+; see
+[ADR-006](docs/adr/006-openf1-backbone.md)). Ingest a race, export the bundle and run the app:
 
 ```bash
 make ingest SEASON=2024 ROUND=1
@@ -57,12 +49,11 @@ make export
 make dev
 ```
 
-For the deploy workflow, add `F1_USERNAME` and `F1_PASSWORD` as repository secrets and set
-GitHub Pages to deploy from GitHub Actions.
+The deploy workflow needs GitHub Pages set to deploy from GitHub Actions.
 
-## Data
+## Data sources
 
-[FastF1](https://github.com/theOehrly/Fast-F1), [OpenF1](https://openf1.org) and
-[Jolpica](https://github.com/jolpica/jolpica-f1).
+[OpenF1](https://openf1.org), with [Jolpica](https://github.com/jolpica/jolpica-f1) planned for
+results history.
 
 Unofficial project, not affiliated with Formula 1, the FIA or any team.

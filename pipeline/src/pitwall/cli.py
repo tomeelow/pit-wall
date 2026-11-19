@@ -8,7 +8,7 @@ from loguru import logger
 from pitwall.config import REPO_ROOT, load_config
 from pitwall.export.bundle import export_bundle
 from pitwall.export.contract import write_schemas
-from pitwall.ingest.fastf1_race import fetch_race
+from pitwall.ingest.openf1 import OpenF1, fetch_race
 from pitwall.ingest.storage import write_race
 
 
@@ -43,7 +43,8 @@ def main() -> None:
 
     match args.command:
         case "ingest":
-            tables = fetch_race(args.season, args.round, config.data_dir / "fastf1-cache")
+            client = OpenF1(config.openf1_url, config.data_dir / "openf1-cache.sqlite")
+            tables = fetch_race(args.season, args.round, client)
             logger.info("wrote {}", write_race(config.data_dir, tables))
         case "export":
             export_bundle(config.data_dir, config.bundle_dir, _git_sha())

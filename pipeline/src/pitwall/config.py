@@ -13,6 +13,7 @@ class PipelineConfig(BaseModel):
 
     data_dir: Path
     bundle_dir: Path
+    openf1_url: str
 
 
 def load_config(path: Path = CONFIG_DIR / "pipeline.yaml") -> PipelineConfig:

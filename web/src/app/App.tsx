@@ -82,7 +82,7 @@ export function App() {
             {race && <> · dataset {race.dataset_version}</>}
           </p>
         )}
-        <p>Unofficial project, not affiliated with Formula 1. Data: OpenF1, FastF1, Jolpica.</p>
+        <p>Unofficial project, not affiliated with Formula 1. Data: OpenF1.</p>
       </footer>
     </main>
   );

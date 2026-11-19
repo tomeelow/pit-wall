@@ -3,8 +3,7 @@
 **Status:** accepted
 
 ## Context
-OpenF1 historical data (2023+) is free; live data during a session is a paid tier. FastF1 data is
-available after the session. A live mode would also need an always-on component, contradicting the
+OpenF1 historical data (2023+) is free; live data during a session is a paid tier. A live mode would also need an always-on component, contradicting the
 zero-cost static architecture (ADR-003).
 
 ## Decision
