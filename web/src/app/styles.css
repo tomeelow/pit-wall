@@ -1,0 +1,131 @@
+:root {
+  color-scheme: light dark;
+  --bg: #f7f7f5;
+  --fg: #16181d;
+  --muted: #6b6f78;
+  --line: #d9dadd;
+  --error: #b42318;
+  --soft: #e10600;
+  --medium: #f5c400;
+  --hard: #fdfdfd;
+  --hard-stroke: #9a9da4;
+  --intermediate: #2e9e3e;
+  --wet: #1f6fd1;
+  --unknown: #8a8d93;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111317;
+    --fg: #e8e9eb;
+    --muted: #8d919a;
+    --line: #2a2d33;
+    --error: #ff8a80;
+    --hard-stroke: transparent;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 15px/1.5 system-ui, sans-serif;
+}
+
+main {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+}
+
+header h1 {
+  margin: 0;
+  font-size: 1.6rem;
+}
+
+.tagline,
+.muted {
+  color: var(--muted);
+}
+
+.tagline {
+  margin: 0 0 24px;
+}
+
+.error {
+  color: var(--error);
+}
+
+.race-picker select {
+  font: inherit;
+  max-width: 100%;
+}
+
+h2 {
+  font-size: 1.1rem;
+  margin: 24px 0 8px;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 0;
+  margin: 0 0 12px;
+  list-style: none;
+  text-transform: capitalize;
+  font-size: 0.85rem;
+}
+
+.swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 6px;
+  border-radius: 3px;
+  vertical-align: -1px;
+}
+
+.chart-scroll {
+  overflow-x: auto;
+}
+
+/* Below this width lap labels and bars become unreadable; scroll the chart instead. */
+.stint-chart {
+  display: block;
+  width: 100%;
+  min-width: 640px;
+  height: auto;
+}
+
+.stint-chart text {
+  fill: var(--fg);
+  font-size: 11px;
+}
+
+.stint-chart .driver {
+  text-anchor: end;
+  font-weight: 600;
+}
+
+.stint-chart .tick {
+  fill: var(--muted);
+  text-anchor: middle;
+}
+
+.compound-soft { fill: var(--soft); background: var(--soft); }
+.compound-medium { fill: var(--medium); background: var(--medium); }
+.compound-hard { fill: var(--hard); background: var(--hard); stroke: var(--hard-stroke); outline: 1px solid var(--hard-stroke); }
+.compound-intermediate { fill: var(--intermediate); background: var(--intermediate); }
+.compound-wet { fill: var(--wet); background: var(--wet); }
+.compound-unknown { fill: var(--unknown); background: var(--unknown); }
+
+footer {
+  margin-top: 32px;
+  border-top: 1px solid var(--line);
+  font-size: 0.8rem;
+}

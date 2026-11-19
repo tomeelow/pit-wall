@@ -1,0 +1,61 @@
+{
+  "$defs": {
+    "RaceEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "season": {
+          "type": "integer"
+        },
+        "round": {
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "dataset_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "season",
+        "round",
+        "name",
+        "path",
+        "dataset_version"
+      ],
+      "title": "RaceEntry",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "0.1.0",
+      "type": "string"
+    },
+    "git_sha": {
+      "type": "string"
+    },
+    "generated_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "races": {
+      "items": {
+        "$ref": "#/$defs/RaceEntry"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "git_sha",
+    "generated_at",
+    "races"
+  ],
+  "title": "Manifest",
+  "type": "object"
+}

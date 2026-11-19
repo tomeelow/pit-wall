@@ -1,0 +1,3 @@
+# Pipeline paths, relative to the repository root.
+data_dir: .data               # raw API caches and canonical parquet tables (gitignored)
+bundle_dir: web/public/data   # exported static bundle served by the web app (gitignored)
