@@ -1,0 +1,126 @@
+{
+  "$defs": {
+    "DriverRace": {
+      "additionalProperties": false,
+      "properties": {
+        "driver": {
+          "type": "string"
+        },
+        "team": {
+          "type": "string"
+        },
+        "position": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "type": "string"
+        },
+        "stints": {
+          "items": {
+            "$ref": "#/$defs/Stint"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "driver",
+        "team",
+        "position",
+        "status",
+        "stints"
+      ],
+      "title": "DriverRace",
+      "type": "object"
+    },
+    "Stint": {
+      "additionalProperties": false,
+      "properties": {
+        "stint": {
+          "type": "integer"
+        },
+        "compound": {
+          "enum": [
+            "SOFT",
+            "MEDIUM",
+            "HARD",
+            "INTERMEDIATE",
+            "WET",
+            "UNKNOWN"
+          ],
+          "type": "string"
+        },
+        "start_lap": {
+          "type": "integer"
+        },
+        "end_lap": {
+          "type": "integer"
+        },
+        "tyre_age_at_start": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "stint",
+        "compound",
+        "start_lap",
+        "end_lap",
+        "tyre_age_at_start"
+      ],
+      "title": "Stint",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "0.1.0",
+      "type": "string"
+    },
+    "season": {
+      "type": "integer"
+    },
+    "round": {
+      "type": "integer"
+    },
+    "name": {
+      "type": "string"
+    },
+    "total_laps": {
+      "type": "integer"
+    },
+    "dataset_version": {
+      "type": "string"
+    },
+    "drivers": {
+      "items": {
+        "$ref": "#/$defs/DriverRace"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "season",
+    "round",
+    "name",
+    "total_laps",
+    "dataset_version",
+    "drivers"
+  ],
+  "title": "Race",
+  "type": "object"
+}

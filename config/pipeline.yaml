@@ -1,0 +1,5 @@
+# Pipeline paths are relative to the repository root.
+data_dir: .data               # raw API cache and canonical parquet tables (gitignored)
+bundle_dir: web/public/data   # exported static bundle served by the web app (gitignored)
+
+openf1_url: https://api.openf1.org/v1

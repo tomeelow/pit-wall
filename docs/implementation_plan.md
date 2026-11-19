@@ -20,7 +20,7 @@ Update this table as phases land. It is the first thing to read when picking up 
 
 | Phase | Status | Notes |
 |---|---|---|
-| 0 — Setup, ADRs, contract skeleton | ◐ code done | `make verify` green; skeleton checked locally on synthetic data. Left: F1 sign-in → real ingest, GitHub remote + secrets + Pages → first deploy |
+| 0 — Setup, ADRs, contract skeleton | ☑ done | OpenF1 ingest verified on 2024 R1–R2; stint chart checked in the browser. Pages deploy runs from `main` once Pages is set to GitHub Actions |
 | 1 — Ingestion | ☐ not started | |
 | 2 — Lap classification & race state | ☐ not started | |
 | 3 — Tyre degradation model | ☐ not started | |
@@ -51,9 +51,9 @@ export path exists.
    ┌───────────────────────────────────┼──────────────────────────────────┐
    ▼                                   ▼                                  ▼
  Ingest (Python)               Fit models (Python)                 Validate (gates)
- • FastF1 timing/telemetry     • tyre degradation (Bayesian)       • sampler diagnostics
- • OpenF1 stints/pits/RC/      • pit loss per track                • held-out lap-time score
-   intervals/location          • SC/VSC hazard per track           • simulator calibration
+ • OpenF1 laps/stints/pits/    • tyre degradation (Bayesian)       • sampler diagnostics
+   race control/intervals/     • pit loss per track                • held-out lap-time score
+   location/car data           • SC/VSC hazard per track           • simulator calibration
  • Jolpica results/calendar    • traffic + overtake probability      (runs the TS engine
    │                           • reliability (DNF hazard)             under Node)
    ▼                                   │                                  │
@@ -83,25 +83,23 @@ bug class this split exists to prevent.
 
 | Data | What it gives us | Source | Access |
 |---|---|---|---|
-| Lap timing | Lap times, sector times, compound, tyre life, pit in/out flags, track status per lap | FastF1 (F1 live-timing archive) | **F1TV Access subscription required** (ADR-006); local cache |
+| Lap timing | Lap times, sector times, pit-out flag, speed traps | OpenF1 `/laps` | Free, no key, 2023+ |
 | Stints | Compound per stint, `tyre_age_at_start` (used sets from quali matter) | OpenF1 `/stints` | Free, no key, 2023+ |
 | Pit stops | Pit-lane duration per stop | OpenF1 `/pit` | Free |
-| Race control | SC / VSC / red flag / yellow flag messages with timestamps and laps | OpenF1 `/race_control`, FastF1 `race_control_messages` | Free |
+| Race control | SC / VSC / red flag / yellow flag messages with timestamps and laps | OpenF1 `/race_control` | Free |
 | Intervals | Gap to leader and to car ahead (~4 s cadence) | OpenF1 `/intervals` | Free |
-| Position / location | x, y, z on track (~3.7 Hz) — replay and track outline | OpenF1 `/location`, FastF1 `pos_data` | Free |
-| Car telemetry | Speed, throttle, brake, gear, RPM, DRS | FastF1 `car_data` / OpenF1 `/car_data` | Free |
-| Weather | Air/track temp, rain flag, wind | OpenF1 `/weather`, FastF1 `weather_data` | Free |
-| Results & calendar | Classification, grid, status (DNF reasons), multi-year history | Jolpica (Ergast-compatible; Ergast itself is shut down) via FastF1 | Free |
+| Position / location | x, y, z on track (~3.7 Hz) — replay and track outline | OpenF1 `/location` | Free |
+| Car telemetry | Speed, throttle, brake, gear, RPM, DRS | OpenF1 `/car_data` | Free |
+| Weather | Air/track temp, rain flag, wind | OpenF1 `/weather` | Free |
+| Results & calendar | Classification (OpenF1 `/session_result`); grid, DNF reasons, calendar, multi-year history | OpenF1 + Jolpica (Ergast-compatible; Ergast itself is shut down) | Free |
 | Compound allocation | Which Pirelli C-number is SOFT/MEDIUM/HARD at each event | Pirelli pre-race press releases | **Hand-maintained** `config/compound_allocation.yaml` |
 
 ### Notes that shape the design
-- **FastF1 is the backbone, OpenF1 fills gaps.** FastF1 has the richest lap table and goes back
-  further (2018+), which matters for SC statistics where 2023+ gives only ~3–4 races per track.
-  OpenF1 is cleaner for stints, pits and intervals. Pick one source per field and document it.
-- **The live-timing archive needs an F1TV Access subscription** (HTTP 401 anonymously, observed
-  2026-11-19).
-  Locally: `uv run python -m fastf1 auth f1tv --authenticate` once; in CI: `F1_USERNAME` /
-  `F1_PASSWORD` secrets on the ingest step only. OpenF1 (keyless, 2023+) is the fallback (ADR-006).
+- **OpenF1 is the backbone (ADR-006).** FastF1 now needs a paid F1TV subscription, so it is not
+  used. The cost is history: OpenF1 starts in 2023, so SC/VSC statistics have only ~3–4 races per
+  track and must pool hard across tracks (Phase 4). Jolpica adds results history and DNF reasons.
+- **OpenF1 has no round numbers.** The round is the race's position among the season's
+  non-cancelled `Race` sessions, sorted by start time (`find_race_session`).
 - **OpenF1 is rate-limited** on the free tier. Throttle, cache every raw response on disk, and never
   re-fetch a finished session unless asked.
 - **Compound labels are relative.** "SOFT" is C3 at one race and C5 at another. Degradation is a
@@ -153,7 +151,7 @@ walking skeleton.
 pit-wall/
 ├── pipeline/                    # Python, uv
 │   ├── src/pitwall/
-│   │   ├── ingest/              # FastF1 / OpenF1 / Jolpica clients, raw cache
+│   │   ├── ingest/              # OpenF1 / Jolpica clients, raw cache
 │   │   ├── laps/                # lap classification, race-state reconstruction
 │   │   ├── models/              # degradation, pit loss, neutralisations, traffic, reliability
 │   │   ├── export/              # pydantic contract models + writers
@@ -181,8 +179,9 @@ pit-wall/
 Dependencies are added in the phase that first uses them (pandera in 1, PyMC/nutpie/ArviZ in 3,
 hypothesis with the first property tests), not up front.
 
-- **Pipeline (uv, Python 3.13):** fastf1, pandas, pyarrow, numpy (< 2.5 while on pandas 2.3),
-  pydantic, pyyaml, loguru; dev: ruff, pyright, pytest, pandas-stubs, types-pyyaml.
+- **Pipeline (uv, Python 3.13):** requests, requests-cache, pandas, pyarrow, numpy (< 2.5 while on
+  pandas 2.3), pydantic, pyyaml, loguru; dev: ruff, pyright, pytest, pandas-stubs, types-pyyaml,
+  types-requests.
 - **Web (npm, exact versions via `.npmrc`):** react; dev: vite, @vitejs/plugin-react, typescript 6.0
   (typescript-eslint does not support 7 yet), eslint, typescript-eslint, eslint-plugin-react-hooks,
   vitest, json-schema-to-typescript. CI runs Node 24 LTS.
@@ -215,7 +214,8 @@ CI runs exactly `make verify`.
 4. **Open-loop opponents in v1.** In a counterfactual, other cars keep their actual strategies
    (shifted only where the rules force it). Reactive opponents are a later phase. The UI says so.
 5. **Post-race only.** No paid OpenF1 tier, no live mode in v1.
-6. **FastF1 with an F1 account** (added during Phase 0, when the archive turned out to need sign-in).
+6. **OpenF1 as the ingestion backbone** (added during Phase 0, when FastF1 turned out to need a
+   paid F1TV subscription).
 
 **Deliverable:** walking skeleton — one race ingested, its stint chart (per-driver compounds and
 stint laps, used again by the Phase 9 race summary) exported through the contract, loaded and
@@ -229,9 +229,9 @@ plotted by the web app, deployed to Pages by CI.
 **Goal:** reproducible, cached, validated canonical tables for every 2023+ race (and older seasons
 where needed for SC statistics).
 
-- `pitwall.ingest` wraps FastF1 and OpenF1 behind small functions per table, each writing parquet
-  under a configured data dir (never inside the repo).
-- Raw API responses cached on disk (FastF1 cache dir + requests-cache for OpenF1/Jolpica).
+- `pitwall.ingest` wraps OpenF1 (and Jolpica, when results history is needed) behind small
+  functions per table, each writing parquet under a configured data dir (never inside the repo).
+- Raw API responses cached on disk (requests-cache, SQLite) with retry and backoff on 429/5xx.
 - Join compound C-numbers from `config/compound_allocation.yaml`; map team names to `team_id`.
 - **Validation (pandera) on every race:** one row per driver per lap; lap numbers contiguous per
   driver until retirement; lap times within plausible bounds for the track; every stint has a
@@ -340,8 +340,9 @@ exported draws per race via the contract.
 
 ### SC / VSC / red flag
 - Per-track probability of at least one SC, VSC, red flag, plus timing: a lap-1 spike and a
-  per-lap hazard afterwards. Use FastF1 history (2018+) because 2023+ alone is too few races per
-  track; partial pooling toward the era-wide rate (Beta-Binomial or a small hierarchical model).
+  per-lap hazard afterwards. OpenF1 history starts in 2023, which is too few races per track for
+  per-track rates alone: partial pooling toward the era-wide rate (Beta-Binomial or a small
+  hierarchical model), possibly with track type (street / permanent) as a group level.
 - Duration distribution (laps) per type.
 - Effect in the sim: SC bunches the field (gaps compress to ~1 s, lapped cars handled per the
   sporting regs config), VSC scales lap times, red flag allows a free tyre change. v1 may exclude
@@ -605,9 +606,9 @@ One engine.
 
 | Layer | Tool | Why |
 |---|---|---|
-| Timing / telemetry | FastF1 | Richest lap table, 2018+, built-in cache, Jolpica support |
-| Supplementary data | OpenF1 REST | Clean stints, pits, intervals, race control, location; free, no key |
-| Results history | Jolpica (via FastF1) | Ergast-compatible successor |
+| Timing / telemetry | OpenF1 REST | Laps, stints, pits, intervals, race control, location, car data; free, no key, 2023+ |
+| Results history | Jolpica | Ergast-compatible successor |
+| HTTP | requests + requests-cache | Every raw response cached; retries on rate limits |
 | Data processing | pandas + pyarrow (parquet) | Standard, sufficient at this data size |
 | Validation | pandera | Schema + range checks per race |
 | Bayesian modelling | PyMC + nutpie, ArviZ | Readable hierarchical models, fast NUTS, diagnostics |

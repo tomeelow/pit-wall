@@ -10,9 +10,10 @@ of Monte Carlo races and answers with a **distribution of finishing positions**,
 Around that core: tyre degradation, traffic/overtaking, SC/VSC, undercut/overcut models, plus race
 replay, telemetry comparison and a post-race strategy debrief.
 
-Data: **FastF1** (timing, telemetry, Jolpica results; the live-timing archive needs an F1TV Access
-subscription — ADR-006) and **OpenF1** (stints, pits, intervals, race control, location; free for 2023+). v1 is **post-race analysis only** — live OpenF1 data is a paid
-tier and is out of scope.
+Data: **OpenF1** (laps, stints, pits, intervals, race control, location, car data, results; free,
+no key, 2023+) and **Jolpica** for results history. FastF1 is not used: it now needs a paid F1TV
+subscription (ADR-006). v1 is **post-race analysis only** — live OpenF1 data is a paid tier and is
+out of scope.
 
 Deployment costs **zero**: GitHub Actions fits models after each race weekend and publishes static
 files; the simulator runs in the browser in Web Workers. There is no server.
@@ -64,12 +65,10 @@ Three things distinguish this project and must not be quietly dropped:
   - Good: `chore: pin pymc and nutpie`
   - Bad: `updates`, `WIP`, `various changes`, `fixed stuff`
 - **Squash noisy histories before merging.** Keep `main` linear and readable.
-- **Never commit generated data, caches or model outputs.** FastF1 cache, parquet tables and
-  exported bundles stay out of git; finalised race bundles go to GitHub Releases (ADR-003).
-- **Never commit secrets or `.env`.** The F1 account credentials are the only secret (ADR-006):
-  locally they live in FastF1's own token store (`uv run python -m fastf1 auth f1tv --authenticate`),
-  in CI as `F1_USERNAME` / `F1_PASSWORD` secrets passed to the ingest step only. Never write them
-  to files, logs, commands or tests.
+- **Never commit generated data, caches or model outputs.** The OpenF1 response cache,
+  parquet tables and exported bundles stay out of git; finalised race bundles go to GitHub Releases (ADR-003).
+- **Never commit secrets or `.env`.** None are needed today (OpenF1 and Jolpica are keyless); keep
+  it that way unless an ADR says otherwise.
 
 ## Code quality
 
@@ -142,7 +141,7 @@ When evaluating a situation at lap N, the simulator may only use information ava
   with start and end.
 - **Fingerprint datasets.** Every fitted model and exported bundle records its dataset hash and git
   sha; the UI model card shows them.
-- **Time:** OpenF1/FastF1 timestamps are UTC; keep them UTC. Laps are 1-indexed as in official
+- **Time:** OpenF1 timestamps are UTC; keep them UTC. Laps are 1-indexed as in official
   timing. Times in seconds (float), distances in metres.
 - **Size budgets** in `config/budgets.yaml` are enforced in CI. Telemetry and location data are
   downsampled, quantised and lazy-loaded; full-race telemetry never ships to the browser.
@@ -161,7 +160,7 @@ When evaluating a situation at lap N, the simulator may only use information ava
 
 ### Legal
 Unofficial project, not affiliated with Formula 1. No F1 logos, team logos or official branding;
-attribute FastF1, OpenF1 and Jolpica.
+attribute OpenF1 and Jolpica.
 
 ## Ask before acting
 
