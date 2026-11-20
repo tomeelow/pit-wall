@@ -14,7 +14,7 @@ from pitwall.export.contract import (
     RaceEntry,
     Stint,
 )
-from pitwall.ingest.storage import RaceTables, dataset_fingerprint, list_races, read_race
+from pitwall.ingest.storage import RaceTables, list_races, read_race
 
 
 def driver_stints(laps: pd.DataFrame) -> list[Stint]:
@@ -57,7 +57,7 @@ def build_race(tables: RaceTables) -> Race:
         round=tables.event.round,
         name=tables.event.name,
         total_laps=tables.event.total_laps,
-        dataset_version=dataset_fingerprint(tables.laps, tables.results),
+        dataset_version=tables.fingerprint(),
         drivers=drivers,
     )
 

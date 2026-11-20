@@ -1,0 +1,15 @@
+# Stable team identity across renames. Keys are team_id; values are the names OpenF1 reports
+# (checked against OpenF1 driver lists for 2023-2026). The id follows the entrant, not the
+# branding: the car changes every season anyway, and the model's era/season levels absorb that.
+# An unmapped name fails ingestion validation.
+red_bull: [Red Bull Racing]
+ferrari: [Ferrari]
+mercedes: [Mercedes]
+mclaren: [McLaren]
+aston_martin: [Aston Martin]
+alpine: [Alpine]
+williams: [Williams]
+haas: [Haas F1 Team]
+racing_bulls: [AlphaTauri, RB, Racing Bulls]
+sauber: [Alfa Romeo, Kick Sauber, Audi]
+cadillac: [Cadillac]

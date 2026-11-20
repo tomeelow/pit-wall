@@ -35,10 +35,11 @@ make verify
 ### Data
 
 Race data comes from [OpenF1](https://openf1.org) (free, no key, 2023+; see
-[ADR-006](docs/adr/006-openf1-backbone.md)). Ingest a race, export the bundle and run the app:
+[ADR-006](docs/adr/006-openf1-backbone.md)). Ingest every finished race of a season (or one
+race with `ROUND=`), export the bundle and run the app:
 
 ```bash
-make ingest SEASON=2024 ROUND=1
+make ingest SEASON=2024
 ```
 
 ```bash
@@ -48,6 +49,11 @@ make export
 ```bash
 make dev
 ```
+
+Each race is validated before it is written; `.data/races/<season>/summary.json` lists every
+race's errors (race not written) and warnings (data quirks, e.g. missing pit records). Compound
+C-numbers come from Pirelli's published allocations in `config/compound_allocation.yaml`, with the
+press releases cited per season.
 
 The deploy workflow needs GitHub Pages set to deploy from GitHub Actions.
 

@@ -21,7 +21,7 @@ Update this table as phases land. It is the first thing to read when picking up 
 | Phase | Status | Notes |
 |---|---|---|
 | 0 — Setup, ADRs, contract skeleton | ☑ done | OpenF1 ingest verified on 2024 R1–R2; stint chart checked in the browser. Pages deploy runs from `main` once Pages is set to GitHub Actions |
-| 1 — Ingestion | ☐ not started | |
+| 1 — Ingestion | ☑ done | 90 races (2023 R1 – 2026 R20) ingested, 0 rejected; allocations sourced from Pirelli releases. Known source gaps listed under Phase 1 → Findings |
 | 2 — Lap classification & race state | ☐ not started | |
 | 3 — Tyre degradation model | ☐ not started | |
 | 4 — Pit loss, SC/VSC, reliability | ☐ not started | |
@@ -242,6 +242,24 @@ where needed for SC statistics).
 
 **Deliverable:** `make ingest SEASON=2025` builds all races of a season idempotently; a validation
 summary per season; tests for the C-number join, team mapping and a race with a red flag.
+
+### Findings (from the first full ingest)
+
+Validation errors block a race from being written; warnings land in
+`.data/races/<season>/summary.json`. What the warnings showed, for Phases 2 and 4 to handle:
+
+- **No pit records for 2023 R1–R6** in OpenF1. `pit_in` is all false there; Phase 2 must infer
+  in-laps from `pit_out` and stint changes for those races, and Phase 4 must not fit pit loss on them.
+- **2025 R6 (Miami): laps 2–24 missing for every driver.** Exclude the gap from anything that needs
+  lap-to-lap continuity (race state, gaps, traffic).
+- **Stints that start on the pit in-lap** in some sessions; `canonical_laps` moves those boundaries
+  to the out-lap (pit record and `is_pit_out_lap` agree). Remaining mismatches (e.g. 2026 R16:
+  stints split on lap 2 with the stop much later) are source errors and stay as warnings.
+- **Pit records with no tyre change** under red flags (pit-lane queues, 20–40 min lane times) and
+  for drive-throughs / repairs. Phase 4's pit-loss fit must filter by lane time and neutralisation.
+- **Drivers out on lap 1** have one timed lap but `laps_completed = 0`; classification is right.
+- Lap-time bounds are relative to the race median, so wet or mixed races (2024 R9, 2025 R12) flag
+  fast dry laps as low outliers. Lap classification (Phase 2) owns the real thresholds.
 
 ---
 
