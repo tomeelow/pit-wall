@@ -32,7 +32,7 @@ Update this table as phases land. It is the first thing to read when picking up 
 | 9 — Strategy lab UI | ☑ done | Rim theme, dark first (light on request). Race, What if, Optimise, Undercut and Model card screens, all simulation on the worker pool, view kept in the URL; editor rule check mirrors the engine's DSQ test. Calibration is shown per segment: no per-track scores are exported yet. Phase 9 → Findings |
 | 10 — Analytics: replay, telemetry, debrief | ☑ done | Replay, Telemetry and Debrief screens. Fastest-lap car data and one lap of location per race (ADR-007) instead of full-race traces; cars placed on the replay by official lap times. Debrief runs on demand in the browser, ex ante and ex post in separate tables. `pitwall export` fails over the budgets in `config/budgets.yaml`. Phase 10 → Findings |
 | 11 — Post-weekend automation & publishing | ☑ done | `weekend` workflow (Mon and Wed 06:00 UTC, or by hand) runs `make weekend PUBLISH=1`: new races, the previous race again, refit, gates, export, upload. GitHub Releases store the races and models and every deploy rebuilds from them (ADR-008). A failed gate keeps the previous parameters live. Phase 11 → Findings |
-| 12 — Docs & polish | ☐ not started | |
+| 12 — Docs & polish | ☑ done | README rewritten: one-paragraph pitch, live link, a What if GIF (Hungary 2024), Mermaid architecture, the modelling story, the calibration table with its failures, data inventory, what's next. Write-up on fuel vs wear in `docs/blog/`. Phase 12 → Findings |
 
 **Build order note:** Phase 0 ends with a *walking skeleton* — one race ingested, a trivial
 output (the race's stint chart) exported through the contract, loaded by the web app, and deployed to Pages. Every later
@@ -1330,6 +1330,18 @@ races, wet-weather strategy).
 
 Blog post: one decision worth explaining (I'd pick the fuel/tyre confounding or ex-ante vs ex-post
 debrief) + one surprising finding from real races.
+
+### Findings
+
+- **The surprising finding** for the write-up ([docs/blog/fuel-and-tyres.md](blog/fuel-and-tyres.md)).
+  Of the 2,316 stints with 10 or more clean laps, a line through lap time against tyre age is
+  negative in 44 % (median +0.006 s/lap): taken naively, tyres get faster with age. With fuel
+  separated, the model's wear slope for the same driver and C-number has a median of +0.05 s/lap
+  and is negative in 5 %.
+- **The GIF** is recorded from the dev server in headless Chromium over the DevTools protocol and
+  put together with Pillow, both outside the project. It is 88 KB, so it lives in `docs/media/`.
+- **Jolpica is attributed but not used yet.** The site footer credits it as CLAUDE.md asks; the
+  README says it is planned.
 
 ---
 
