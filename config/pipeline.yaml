@@ -127,3 +127,34 @@ events:
     # Leave-one-season-out validation of the neutralisation rates. 2026 is not held out: with no
     # 2026 race in training its era level would be prior only.
     validation_seasons: [2023, 2024, 2025]
+
+
+# Traffic and overtaking (Phase 5). Learned from a car and the car directly ahead on the same lap,
+# on laps that can only be decided on track.
+traffic:
+  # Pairs further apart at the start of a lap are not modelled: 0.1 % of them pass, by incident.
+  # The simulator never passes from beyond this gap.
+  max_gap_s: 3.0
+  # Within this gap at the line the car behind may use DRS (2023-2025) or overtake mode (2026).
+  drs_gap_s: 1.0
+  # Dirty-air loss is reported per gap bin (s), up to the gap where it has faded.
+  dirty_air_bins: [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
+  # 2000 draws: the track spread and track effects (26 tracks) mix slowest, at ESS ~450 per 1000.
+  sampler:
+    chains: 4
+    tune: 1000
+    draws: 2000
+    target_accept: 0.9
+    seed: 20260303
+  priors:
+    intercept: {mean: -3.0, sd: 2.0}  # logit of passing from zero gap at equal pace
+    coefficient_sd: 2.0               # per second of gap / of pace difference, and for DRS
+    track_sd: 0.5                     # half-normal scale of a track's logit deviation
+  gate:
+    max_rhat: 1.01
+    min_ess: 400
+    max_divergences: 0
+  export_draws: 200
+  # Leave-one-season-out validation. 2026 is not held out: its era terms would be prior only.
+  validation_seasons: [2023, 2024, 2025]
+  reliability_bins: [0.0, 0.01, 0.02, 0.05, 0.1, 0.2, 0.3, 0.5, 1.0]

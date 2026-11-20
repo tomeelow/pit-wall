@@ -1,4 +1,4 @@
-.PHONY: setup verify verify-pipeline verify-web contract contract-check ingest fit backtest fit-events validate-events export build dev
+.PHONY: setup verify verify-pipeline verify-web contract contract-check ingest fit backtest fit-events validate-events fit-traffic validate-traffic export build dev
 
 PY := cd pipeline && uv run --frozen
 WEB := cd web && npm run -s
@@ -56,6 +56,14 @@ fit-events:
 # Leave-one-season-out validation of the neutralisation rates.
 validate-events:
 	$(PY) pitwall validate-events
+
+# Dirty air and the pass model. Needs `make fit` first: pace comes from the degradation draws.
+fit-traffic:
+	$(PY) pitwall fit-traffic
+
+# Leave-one-season-out validation of the pass model, with a reliability table.
+validate-traffic:
+	$(PY) pitwall validate-traffic
 
 export:
 	$(PY) pitwall export

@@ -9,14 +9,13 @@ from pitwall.ingest.storage import RaceTables
 from pitwall.models import backtest
 from pitwall.models.degradation import (
     Fit,
-    _zero_sum_deviation,
     drop_sparse_compounds,
     fit,
     race_draws,
     race_id,
     training_laps,
 )
-from pitwall.models.sampling import Diagnostics
+from pitwall.models.sampling import Diagnostics, zero_sum_deviation
 from tests.conftest import CONFIG
 
 REGULATIONS = load_regulations()
@@ -174,7 +173,7 @@ def test_backtest_baselines_on_a_straight_stint(synthetic_fit: Fit) -> None:
 def test_zero_sum_deviations_match_centred_normals() -> None:
     segment = np.array([0, 1, 0, 2, 0, 1])  # sizes 3, 2 and 1
     with pm.Model():
-        deviation = _zero_sum_deviation("z", pt.as_tensor(2.0), segment, segments=3)
+        deviation = zero_sum_deviation("z", pt.as_tensor(2.0), segment, segments=3)
     draws = np.asarray(pm.draw(deviation, draws=20_000, random_seed=0))
     totals = np.stack([draws[:, segment == s].sum(axis=1) for s in range(3)])
     assert np.abs(totals).max() < 1e-9

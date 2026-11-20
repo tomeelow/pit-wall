@@ -20,9 +20,16 @@ from pitwall.config import (
 from pitwall.export.bundle import export_bundle
 from pitwall.export.contract import write_schemas
 from pitwall.ingest.openf1 import OpenF1, fetch_race, finished_rounds
-from pitwall.ingest.storage import list_races, race_dir, read_race, season_dir, write_race
+from pitwall.ingest.storage import (
+    RaceTables,
+    list_races,
+    race_dir,
+    read_race,
+    season_dir,
+    write_race,
+)
 from pitwall.ingest.validate import RaceReport, check_prepared, validate_race, write_summary
-from pitwall.models import backtest, degradation, events
+from pitwall.models import backtest, degradation, events, traffic
 from pitwall.models.hazards import RateModel
 from pitwall.prepare import prepare_race
 
@@ -294,6 +301,117 @@ def validate_events(config: PipelineConfig) -> Path:
     return report
 
 
+def _traffic_pairs(config: PipelineConfig) -> tuple[pd.DataFrame, dict[str, RaceTables]]:
+    """Lap pairs of every race with degradation draws (they give each car's free-air pace)."""
+    regulations = load_regulations()
+    frames, races = [], {}
+    for path in list_races(config.data_dir):
+        tables = read_race(path)
+        race = degradation.race_id(tables.event.season, tables.event.round)
+        races[race] = tables
+        draws_path = path / "degradation_draws.parquet"
+        if not draws_path.exists():
+            logger.warning("{}: no degradation draws, no traffic pairs", race)
+            continue
+        predicted = traffic.predicted_laps(tables, pd.read_parquet(draws_path))
+        frames.append(
+            traffic.lap_pairs(tables, predicted).assign(
+                race=race,
+                season=tables.event.season,
+                era=regulations.era_of(tables.event.season).name,
+                circuit=tables.event.circuit,
+            )
+        )
+    return pd.concat(frames, ignore_index=True), races
+
+
+def fit_traffic(config: PipelineConfig) -> bool:
+    """Fit the pass model on every race and, if it passes the gate, export each race's track
+    terms and its era's dirty-air table."""
+    settings = config.traffic
+    pairs, races = _traffic_pairs(config)
+    rows = traffic.training_pairs(pairs, settings)
+    fit = traffic.PassModel(rows, settings).fit()
+    card = traffic.model_card(fit, rows, pairs, settings, _git_sha())
+    out = _model_dir(config, "traffic")
+    out.mkdir(parents=True, exist_ok=True)
+    if not fit.passed:
+        (out / "card.rejected.json").write_text(card.model_dump_json(indent=2))
+        logger.error("pass model failed the gate, nothing exported: {}", fit.diagnostics)
+        return False
+
+    regulations = load_regulations()
+    rng = np.random.default_rng(settings.sampler.seed)
+    picks = np.linspace(0, fit.samples - 1, settings.export_draws).round().astype(int)
+    for tables in races.values():
+        era = regulations.era_of(tables.event.season).name
+        folder = race_dir(config.data_dir, tables.event.season, tables.event.round)
+        terms = fit.terms(era, tables.event.circuit_key, rng).iloc[picks].reset_index(drop=True)
+        terms.rename_axis("draw").reset_index().to_parquet(
+            folder / "traffic_draws.parquet", index=False
+        )
+        (folder / "traffic.json").write_text(
+            traffic.RaceTraffic(
+                max_gap_s=settings.max_gap_s,
+                drs_gap_s=settings.drs_gap_s,
+                dirty_air=card.dirty_air[era],
+            ).model_dump_json(indent=2)
+        )
+    (out / "card.json").write_text(card.model_dump_json(indent=2))
+    logger.info("pass model: {}; {} races exported", fit.diagnostics, len(races))
+    return True
+
+
+def validate_traffic(config: PipelineConfig) -> Path:
+    """Leave-one-season-out: pass probability against observed passes, with a reliability table."""
+    settings = config.traffic
+    pairs, _ = _traffic_pairs(config)
+    model = traffic.PassModel(traffic.training_pairs(pairs, settings), settings)
+    rng = np.random.default_rng(settings.sampler.seed)
+    predictions, diagnostics = [], []
+    for season in settings.validation_seasons:
+        held = (model.rows["season"] == season).to_numpy()
+        found, fit = traffic.validate_season(model, held, rng, settings.export_draws)
+        predictions.append(found)
+        diagnostics.append({"season": season, **fit.diagnostics.model_dump(), "passed": fit.passed})
+        logger.info("{} held out: {}", season, fit.diagnostics)
+    results = pd.concat(predictions, ignore_index=True)
+    results["gap"] = pd.cut(results["gap_s"], settings.dirty_air_bins, include_lowest=True).astype(
+        str
+    )
+    bins = settings.reliability_bins
+    sections = {
+        "Overall": traffic.scores(results),
+        "By held-out season": traffic.scores(results, ["season"]),
+        "By gap at the start of the lap (s)": traffic.scores(results, ["gap"]),
+        "Reliability: model": traffic.reliability(
+            results["model"].to_numpy(), results["passed"].to_numpy(), bins
+        ),
+        "Reliability: baseline": traffic.reliability(
+            results["baseline"].to_numpy(), results["passed"].to_numpy(), bins
+        ),
+        "Per track: passes observed vs expected": traffic.scores(results, ["circuit"]),
+        "Sampler diagnostics per held-out fit": pd.DataFrame(diagnostics)
+        .set_index("season")
+        .round(3),
+    }
+    out = _model_dir(config, "traffic")
+    out.mkdir(parents=True, exist_ok=True)
+    results.to_parquet(out / "validation.parquet", index=False)
+    report = out / "validation.md"
+    report.write_text(
+        f"# Pass model: leave-one-season-out (git {_git_sha()})\n\n"
+        "Probability that a car passes the car directly ahead on a lap, for pairs within "
+        f"{settings.max_gap_s} s at the start of a lap that can only be decided on track. "
+        "Baseline: the training pass rate in the same era and gap bin. Lower log loss and Brier "
+        "are better; reliability compares mean predicted probability with observed frequency.\n\n"
+        + "\n\n".join(f"## {title}\n\n{_markdown(table)}" for title, table in sections.items())
+        + "\n"
+    )
+    logger.info("traffic validation:\n{}", sections["Overall"].to_string())
+    return report
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="pitwall")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -320,6 +438,13 @@ def main() -> None:
         "validate-events", help="leave-one-season-out validation of the neutralisation rates"
     )
 
+    commands.add_parser(
+        "fit-traffic", help="fit dirty air and the pass model; export them per race"
+    )
+    commands.add_parser(
+        "validate-traffic", help="leave-one-season-out validation of the pass model"
+    )
+
     commands.add_parser("export", help="write the static bundle from all ingested races")
 
     contract = commands.add_parser("contract", help="write JSON Schema for the export contract")
@@ -343,6 +468,11 @@ def main() -> None:
                 sys.exit(1)
         case "validate-events":
             validate_events(config)
+        case "fit-traffic":
+            if not fit_traffic(config):
+                sys.exit(1)
+        case "validate-traffic":
+            validate_traffic(config)
         case "export":
             export_bundle(config.data_dir, config.bundle_dir, _git_sha())
         case "contract":

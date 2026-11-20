@@ -94,6 +94,24 @@ class EventsConfig(_Config):
     hazards: HazardConfig
 
 
+class TrafficPriors(_Config):
+    intercept: NormalPrior
+    coefficient_sd: float = Field(gt=0)
+    track_sd: float = Field(gt=0)
+
+
+class TrafficConfig(_Config):
+    max_gap_s: float = Field(gt=0)
+    drs_gap_s: float = Field(gt=0)
+    dirty_air_bins: list[float] = Field(min_length=2)
+    sampler: SamplerConfig
+    priors: TrafficPriors
+    gate: GateConfig
+    export_draws: int = Field(ge=1)
+    validation_seasons: list[int] = Field(min_length=1)
+    reliability_bins: list[float] = Field(min_length=2)
+
+
 class PipelineConfig(_Config):
     data_dir: Path
     bundle_dir: Path
@@ -104,6 +122,7 @@ class PipelineConfig(_Config):
     classification: ClassificationConfig
     degradation: DegradationConfig
     events: EventsConfig
+    traffic: TrafficConfig
 
 
 class Era(_Config):
