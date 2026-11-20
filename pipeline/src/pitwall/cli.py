@@ -22,7 +22,8 @@ from pitwall.export.contract import write_schemas
 from pitwall.ingest.openf1 import OpenF1, fetch_race, finished_rounds
 from pitwall.ingest.storage import list_races, race_dir, read_race, season_dir, write_race
 from pitwall.ingest.validate import RaceReport, check_prepared, validate_race, write_summary
-from pitwall.models import backtest, degradation
+from pitwall.models import backtest, degradation, events
+from pitwall.models.hazards import RateModel
 from pitwall.prepare import prepare_race
 
 
@@ -92,8 +93,8 @@ def ingest(config: PipelineConfig, season: int, round_: int | None) -> bool:
     return not failed
 
 
-def _model_dir(config: PipelineConfig) -> Path:
-    return config.data_dir / "models" / "degradation"
+def _model_dir(config: PipelineConfig, model: str = "degradation") -> Path:
+    return config.data_dir / "models" / model
 
 
 def fit_degradation(config: PipelineConfig, era_name: str) -> bool:
@@ -203,6 +204,96 @@ def backtest_degradation(config: PipelineConfig) -> Path:
     return report
 
 
+def _history(config: PipelineConfig) -> events.History:
+    tables = list(map(read_race, list_races(config.data_dir)))
+    return events.History.of(tables, config.events, load_regulations())
+
+
+def fit_events(config: PipelineConfig) -> bool:
+    """Fit event rates on every race (the gate), then per race with that race masked out, and
+    export each race's pit-loss parameters and rate draws. A race whose masked fit fails the gate
+    gets nothing new: its previous files stay live."""
+    settings = config.events.hazards
+    history = _history(config)
+    model = RateModel(history.rows, settings)
+    full = model.fit()
+    out = _model_dir(config, "events")
+    out.mkdir(parents=True, exist_ok=True)
+    card = events.model_card(history, full, _git_sha())
+    if not full.passed:
+        (out / "card.rejected.json").write_text(card.model_dump_json(indent=2))
+        logger.error("event rates failed the gate, nothing exported: {}", full.diagnostics)
+        return False
+
+    regulations = load_regulations()
+    rng = np.random.default_rng(settings.sampler.seed)
+    failed = []
+    for race, tables in history.races.items():
+        fit = model.fit((history.rows["race"] == race).to_numpy())
+        if not fit.passed:
+            failed.append(race)
+            logger.error("{} masked: failed the gate, not exported: {}", race, fit.diagnostics)
+            continue
+        era = regulations.era_of(tables.event.season).name
+        folder = race_dir(config.data_dir, tables.event.season, tables.event.round)
+        draws = events.race_hazards(fit, tables, era, settings.export_draws, rng)
+        draws.to_parquet(folder / "hazard_draws.parquet", index=False)
+        (folder / "events.json").write_text(history.parameters(race, era).model_dump_json(indent=2))
+    (out / "card.json").write_text(card.model_dump_json(indent=2))
+    logger.info(
+        "event rates: {}; {} races exported, {} failed",
+        full.diagnostics,
+        len(history.races) - len(failed),
+        failed,
+    )
+    return not failed
+
+
+def validate_events(config: PipelineConfig) -> Path:
+    """Leave-one-season-out: predicted vs observed neutralisations per race and track."""
+    settings = config.events.hazards
+    history = _history(config)
+    model = RateModel(history.rows, settings)
+    rng = np.random.default_rng(settings.sampler.seed)
+    predictions, diagnostics = [], []
+    for season in settings.validation_seasons:
+        found, fit = events.validate_season(model, history, season, rng)
+        predictions.append(found.assign(season=season))
+        diagnostics.append({"season": season, **fit.diagnostics.model_dump(), "passed": fit.passed})
+        logger.info("{} held out: {}", season, fit.diagnostics)
+    results = pd.concat(predictions, ignore_index=True)
+    per_track = results.pivot_table(
+        index="track", columns="kind", values=["observed", "model", "baseline"], aggfunc="sum"
+    ).round(2)
+    per_track.columns = [f"{kind}_{value}" for value, kind in per_track.columns]
+    per_track = per_track[sorted(per_track.columns)]
+    per_track["races"] = results.groupby("track")["race"].nunique()
+    sections = {
+        "Overall": events.scores(results),
+        "By held-out season": results.groupby("season")[
+            ["kind", "observed", "model", "baseline"]
+        ].apply(events.scores),
+        "Per track: races with at least one event, observed vs expected": per_track,
+        "Sampler diagnostics per held-out fit": pd.DataFrame(diagnostics)
+        .set_index("season")
+        .round(3),
+    }
+    out = _model_dir(config, "events")
+    out.mkdir(parents=True, exist_ok=True)
+    results.to_parquet(out / "validation.parquet", index=False)
+    report = out / "validation.md"
+    report.write_text(
+        f"# Neutralisation rates: leave-one-season-out (git {_git_sha()})\n\n"
+        "Probability of at least one SC / VSC / red flag per race, ex ante (every lap after the "
+        "first at risk). Baseline: share of the same era's training races with at least one. "
+        "Brier score and log loss: lower is better.\n\n"
+        + "\n\n".join(f"## {title}\n\n{_markdown(table)}" for title, table in sections.items())
+        + "\n"
+    )
+    logger.info("event validation:\n{}", sections["Overall"].to_string())
+    return report
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="pitwall")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -220,6 +311,13 @@ def main() -> None:
 
     commands.add_parser(
         "backtest-degradation", help="leave-one-race-out backtest against the baselines"
+    )
+
+    commands.add_parser(
+        "fit-events", help="fit pit loss and SC/VSC/red-flag/DNF rates; export them per race"
+    )
+    commands.add_parser(
+        "validate-events", help="leave-one-season-out validation of the neutralisation rates"
     )
 
     commands.add_parser("export", help="write the static bundle from all ingested races")
@@ -240,6 +338,11 @@ def main() -> None:
                 sys.exit(1)
         case "backtest-degradation":
             backtest_degradation(config)
+        case "fit-events":
+            if not fit_events(config):
+                sys.exit(1)
+        case "validate-events":
+            validate_events(config)
         case "export":
             export_bundle(config.data_dir, config.bundle_dir, _git_sha())
         case "contract":

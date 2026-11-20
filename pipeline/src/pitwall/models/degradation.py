@@ -23,7 +23,6 @@ fewest laps absorbs it (2025 Monaco's C6 took +9 s).
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-import arviz as az
 import numpy as np
 import nutpie
 import pandas as pd
@@ -33,8 +32,9 @@ import xarray as xr
 from pydantic import BaseModel
 from pytensor.tensor.variable import TensorVariable
 
-from pitwall.config import DegradationConfig, Era, GateConfig, NormalPrior
+from pitwall.config import DegradationConfig, Era, NormalPrior
 from pitwall.ingest.storage import RaceTables, dataset_fingerprint
+from pitwall.models.sampling import Diagnostics, sample
 
 GROUPS: dict[str, tuple[str, ...]] = {
     "c": ("compound_c",),
@@ -204,38 +204,6 @@ def build_model(
     return model
 
 
-class Diagnostics(BaseModel):
-    max_rhat: float
-    min_ess_bulk: float
-    min_ess_tail: float
-    divergences: int
-
-    def __str__(self) -> str:
-        return (
-            f"max_rhat={self.max_rhat:.3f} ess_bulk={self.min_ess_bulk:.0f} "
-            f"ess_tail={self.min_ess_tail:.0f} divergences={self.divergences}"
-        )
-
-    def passes(self, gate: GateConfig) -> bool:
-        return (
-            self.max_rhat <= gate.max_rhat
-            and min(self.min_ess_bulk, self.min_ess_tail) >= gate.min_ess
-            and self.divergences <= gate.max_divergences
-        )
-
-
-def diagnose(idata: xr.DataTree) -> Diagnostics:
-    def values(stat: xr.DataTree) -> np.ndarray:
-        return np.concatenate([np.ravel(v.to_numpy()) for v in stat.data_vars.values()])
-
-    return Diagnostics(
-        max_rhat=float(np.nanmax(values(az.rhat(idata)))),
-        min_ess_bulk=float(np.nanmin(values(az.ess(idata, method="bulk")))),
-        min_ess_tail=float(np.nanmin(values(az.ess(idata, method="tail")))),
-        divergences=int(idata.children["sample_stats"].dataset["diverging"].to_numpy().sum()),
-    )
-
-
 @dataclass(frozen=True)
 class Fit:
     era: Era
@@ -305,19 +273,7 @@ class Fit:
 def fit(laps: pd.DataFrame, era: Era, config: DegradationConfig, fuel: NormalPrior) -> Fit:
     groups = Groups.of(laps)
     model = build_model(laps, groups, config, fuel)
-    s = config.sampler
-    idata = nutpie.sample(
-        nutpie.compile_pymc_model(model),
-        chains=s.chains,
-        tune=s.tune,
-        draws=s.draws,
-        seed=s.seed,
-        target_accept=s.target_accept,
-        progress_bar=False,
-    )
-    posterior = idata.children["posterior"].to_dataset().stack(sample=("chain", "draw"))
-    posterior = posterior.transpose("sample", ...).drop_vars(["sample", "chain", "draw"])
-    diagnostics = diagnose(idata)
+    posterior, diagnostics = sample(nutpie.compile_pymc_model(model), config.sampler)
     return Fit(era, laps, groups, posterior, diagnostics, diagnostics.passes(config.gate))
 
 

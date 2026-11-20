@@ -1,4 +1,4 @@
-.PHONY: setup verify verify-pipeline verify-web contract contract-check ingest fit backtest export build dev
+.PHONY: setup verify verify-pipeline verify-web contract contract-check ingest fit backtest fit-events validate-events export build dev
 
 PY := cd pipeline && uv run --frozen
 WEB := cd web && npm run -s
@@ -48,6 +48,14 @@ fit:
 # Leave-one-race-out over config/pipeline.yaml → degradation.backtest.races. Slow: one refit each.
 backtest:
 	$(PY) pitwall backtest-degradation
+
+# Pit loss and SC/VSC/red-flag/DNF rates; every race gets a refit with itself masked out.
+fit-events:
+	$(PY) pitwall fit-events
+
+# Leave-one-season-out validation of the neutralisation rates.
+validate-events:
+	$(PY) pitwall validate-events
 
 export:
 	$(PY) pitwall export

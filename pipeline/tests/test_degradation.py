@@ -8,7 +8,6 @@ from pitwall.config import GateConfig, SamplerConfig, load_regulations
 from pitwall.ingest.storage import RaceTables
 from pitwall.models import backtest
 from pitwall.models.degradation import (
-    Diagnostics,
     Fit,
     _zero_sum_deviation,
     drop_sparse_compounds,
@@ -17,6 +16,7 @@ from pitwall.models.degradation import (
     race_id,
     training_laps,
 )
+from pitwall.models.sampling import Diagnostics
 from tests.conftest import CONFIG
 
 REGULATIONS = load_regulations()
