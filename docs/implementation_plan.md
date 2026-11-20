@@ -27,7 +27,7 @@ Update this table as phases land. It is the first thing to read when picking up 
 | 4 — Pit loss, SC/VSC, reliability | ☑ done | Pit loss per track (green 19–28 s; SC/VSC factors per era: 0.68/0.84× in 2023–25, ~0.95× in 2026), SC/VSC/red/DNF rates per race with that race masked out; per-track rates barely beat era-wide. 2026 rebuilt with VSCs. Phase 4 → Findings |
 | 5 — Traffic & overtaking | ☑ done | Dirty air only matters within 0.5 s (0.47 s/lap); pass model (gap, pace delta, within 1 s, track) beats the gap-only baseline out of sample (log loss 0.134 vs 0.173) and is well calibrated 1–70 %; under-predicts passes from 1.5–3 s back. Phase 5 → Findings |
 | 6 — Simulation engine | ☑ done | Seeded TS engine with CRN, worker pool and contract 0.2.0 sim inputs for 76/90 races; 10 000 × 60 × 20 in 1.5 s on one thread (CI budget 6 s); zero-noise replay misses the result by 1.24 positions vs 2.33 for the lap-1 order. Open-loop stops under sampled SCs fatten ex-ante tails — Phase 7's first question. Phase 6 → Findings |
-| 7 — Simulator validation | ☐ not started | |
+| 7 — Simulator validation | ☑ done | 75 dry races × 4 start laps × 1,000 ex-ante runs: coverage 0.48 / 0.78 at 50 / 80 %, log score −1.93 vs −2.38 for the order at the start lap; beats both baselines in every segment. Overconfident from 75 % distance (0.44 / 0.71) and after real neutralisations; Miami 2025 refused (race-time gap). Phase 7 → Findings |
 | 8 — Strategy optimiser, counterfactuals, undercut | ☐ not started | |
 | 9 — Strategy lab UI | ☐ not started | |
 | 10 — Analytics: replay, telemetry, debrief | ☐ not started | |
@@ -897,6 +897,107 @@ stay live and the run reports why.
 
 **Deliverable:** `web/scripts/backtest.ts` + `pipeline/src/pitwall/validate/`, a calibration report
 published with the bundle, thresholds in `config/thresholds.yaml`.
+
+### Findings (first calibration, 75 dry races, 2023 R1 – 2026 R20)
+
+**How it runs.** Run `make export`, then `make validate-sim`, then `make export` again. The second
+export publishes the accepted calibration.
+- `make validate-sim` calls `web/scripts/backtest.ts`. That script runs the TypeScript engine under
+  Node on every simulable race in the bundle.
+- Each race is simulated 1,000 times from four start laps: after lap 1, and at 25 %, 50 % and 75 %
+  of distance.
+- Every run is ex ante with the actual strategies. Safety cars, VSCs, red flags, retirements and
+  stop times are sampled.
+- The whole run takes about 50 s.
+- Outputs go to `.data/models/sim/`: `validation.md`, `validation.parquet` (one row per entry) and
+  `calibration.json`.
+- A run that fails the gate writes `calibration.rejected.json` instead, so the accepted file stays
+  live.
+- `make export` copies the accepted file to the bundle as `calibration.json` (contract 0.3.0,
+  `Manifest.calibration_path`).
+- Code: `pitwall.validate.simulator`, `web/src/sim/backtest.ts`.
+
+**What is scored.** One entry is one car running at a start lap: 5,713 entries in all.
+- Its outcome is its official place, or "not classified" as one extra, worst category.
+- The engine classifies a car that retires after covering 90 % of the laps (`classified_fraction`
+  in `config/regulations.yaml`).
+- **Coverage** uses the randomised PIT, F(y − 1) + U·P(y), which is uniform when the forecast is
+  calibrated. The share inside [0.25, 0.75] should be 50 % and inside [0.1, 0.9] 80 %.
+- **Interval coverage** uses the simulated central 50 % / 80 % interval of places. Places are
+  discrete, so it should hold *at least* that often. It reads above nominal even for a calibrated
+  forecast; PIT coverage is the calibration measure.
+- **Log score:** mean log P(outcome), with counts smoothed by 0.5. It is compared with two
+  baselines, each learnt per start fraction from every other race (leave one race out):
+  - P(outcome | place at the start lap);
+  - P(outcome | place after lap 1), which stands in for "finish = grid" because simulations start
+    after lap 1.
+
+| Segment | Races | Entries | Coverage 50 / 80 | Interval 50 / 80 | Log score | Start-lap order | Lap-1 order |
+|---|---|---|---|---|---|---|---|
+| All | 75 | 5,713 | 0.483 / 0.783 | 0.674 / 0.854 | **−1.93** | −2.38 | −2.60 |
+| From after lap 1 | 75 | 1,492 | 0.515 / 0.834 | 0.679 / 0.897 | **−2.10** | −2.59 | −2.59 |
+| From 25 % | 75 | 1,443 | 0.503 / 0.812 | 0.670 / 0.868 | **−2.03** | −2.56 | −2.60 |
+| From 50 % | 75 | 1,409 | 0.476 / 0.776 | 0.677 / 0.841 | **−1.88** | −2.36 | −2.61 |
+| From 75 % | 75 | 1,369 | 0.436 / 0.705 | 0.668 / 0.804 | **−1.69** | −1.98 | −2.58 |
+| 2023–2025 | 59 | 4,438 | 0.476 / 0.775 | 0.664 / 0.845 | **−1.93** | −2.39 | −2.60 |
+| 2026 | 16 | 1,275 | 0.511 / 0.811 | 0.707 / 0.885 | **−1.92** | −2.34 | −2.58 |
+| No neutralisation after the start | 61 | 3,232 | 0.517 / 0.821 | 0.731 / 0.890 | **−1.68** | −2.26 | −2.55 |
+| Neutralisation after the start | 52 | 2,481 | 0.439 / 0.734 | 0.599 / 0.807 | **−2.25** | −2.54 | −2.66 |
+| Passing hard (tercile of the pass-model intercept) | 27 | 2,064 | 0.475 / 0.773 | 0.664 / 0.846 | **−1.97** | −2.36 | −2.57 |
+| Passing medium | 23 | 1,710 | 0.509 / 0.800 | 0.690 / 0.863 | **−1.91** | −2.34 | −2.55 |
+| Passing easy | 25 | 1,939 | 0.470 / 0.779 | 0.670 / 0.854 | **−1.91** | −2.44 | −2.66 |
+
+The PIT histogram, in 10 bins, is close to flat with a slight U shape:
+0.112, 0.097, 0.095, 0.095, 0.099, 0.100, 0.089, 0.100, 0.109, 0.105.
+
+**Reading it:**
+- The simulator beats both baselines in every segment and from every start lap.
+- Overall it is calibrated to within 2 points at both levels.
+- From early start laps (after lap 1, 25 %) it is calibrated or slightly underconfident.
+
+**Where it is miscalibrated.** These go in the README.
+- **Late in the race it is overconfident.** From 75 % distance, coverage is 0.44 / 0.71. It still
+  beats the order at the start lap, but by less (−1.69 vs −1.98). A few laps of open-loop racing
+  leave too little spread: no late reactive stops, no defending, no driver errors.
+- **After a real neutralisation it is overconfident.** Coverage is 0.44 / 0.73 when a safety car,
+  VSC or red flag actually happened after the start lap. Ex ante that event is only sampled, so
+  this is partly the price of the information-set rule.
+- There is also a leakage in the other direction. The actual strategies were chosen in reaction to
+  the real safety cars, but here they run against sampled ones.
+- **Phase 6's worry did not dominate.** Open-loop stops paying full pit loss under a sampled safety
+  car fatten some individual tails, as in the Monza 2025 example. Overall the forecasts are not
+  underconfident, and the neutralised segment errs the other way. Reactive stops (an ADR-004
+  change) remain a candidate for the late-race overconfidence, not a calibration emergency.
+
+**Scope and softenings:**
+- **Dry races only.** Mixed and wet races are not simulable, so the plan's "dry vs mixed" segment
+  has no mixed side. Track type is approximated by how easy passing is.
+- **Race-state gap.** Miami 2025 is refused by the exporter: OpenF1 race times are missing on lap 1
+  and from lap 25. A car with no time at the line on a lap it went on from would vanish from the
+  simulation, so the exporter now refuses such races. A possible Phase 2 follow-up is to rebuild
+  those times from lap times.
+- **Pace softening.** Event and retirement rates for a race come from fits without it. Pace,
+  degradation and the pass model are fitted on every race including the one simulated: the
+  documented pace softening. So these numbers are not fully out of sample for pace.
+
+**Gate** (`config/thresholds.yaml` → `simulator`; these values are a proposal, open to review):
+- From 50 % distance, every start fraction must beat the order at the start lap on log score.
+- Against the accepted calibration, the overall log score may not fall by more than 0.02.
+- Against the accepted calibration, neither coverage may move more than 3 points further from
+  nominal.
+- The first run passed. Phase 11 will call this gate after each weekend's refit; the sampler
+  diagnostics stay gated in each model's own fit.
+
+**Tests:**
+- PIT coverage is nominal for a calibrated forecast and low for an overconfident one.
+- Central intervals are right at exact tail boundaries. This test found a float bug.
+- The baselines never learn from the race they score.
+- Entries cover only the cars running at the start lap, with the right outcomes.
+- Gate pass and fail cases.
+- The bundle publishes only a calibration that matches the contract.
+- `finishCounts` places each car once per run, and a car already out is never classified.
+- `startLaps` maps fractions to laps.
+- The backtest script runs on Node's type stripping, still without `@types/node`.
 
 ---
 

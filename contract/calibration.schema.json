@@ -1,0 +1,121 @@
+{
+  "$defs": {
+    "GateResult": {
+      "additionalProperties": false,
+      "properties": {
+        "passed": {
+          "type": "boolean"
+        },
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "passed",
+        "reasons"
+      ],
+      "title": "GateResult",
+      "type": "object"
+    },
+    "SegmentScore": {
+      "additionalProperties": false,
+      "description": "Scores of one group of car-starts. coverage_*: share of randomised PIT values inside the\ncentral interval (nominal 0.5 / 0.8 when calibrated). interval_coverage_*: share of finishes\ninside the simulated central interval of places (at least nominal, the places being discrete).\nlog_score*: mean log probability of the actual result, nats; higher is better.",
+      "properties": {
+        "segment": {
+          "type": "string"
+        },
+        "races": {
+          "type": "integer"
+        },
+        "entries": {
+          "type": "integer"
+        },
+        "coverage_50": {
+          "type": "number"
+        },
+        "coverage_80": {
+          "type": "number"
+        },
+        "interval_coverage_50": {
+          "type": "number"
+        },
+        "interval_coverage_80": {
+          "type": "number"
+        },
+        "log_score": {
+          "type": "number"
+        },
+        "log_score_start_order": {
+          "type": "number"
+        },
+        "log_score_lap1_order": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "segment",
+        "races",
+        "entries",
+        "coverage_50",
+        "coverage_80",
+        "interval_coverage_50",
+        "interval_coverage_80",
+        "log_score",
+        "log_score_start_order",
+        "log_score_lap1_order"
+      ],
+      "title": "SegmentScore",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "0.3.0",
+      "type": "string"
+    },
+    "git_sha": {
+      "type": "string"
+    },
+    "generated_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "dataset_version": {
+      "type": "string"
+    },
+    "runs": {
+      "type": "integer"
+    },
+    "segments": {
+      "items": {
+        "$ref": "#/$defs/SegmentScore"
+      },
+      "type": "array"
+    },
+    "pit_histogram": {
+      "items": {
+        "type": "number"
+      },
+      "type": "array"
+    },
+    "gate": {
+      "$ref": "#/$defs/GateResult"
+    }
+  },
+  "required": [
+    "schema_version",
+    "git_sha",
+    "generated_at",
+    "dataset_version",
+    "runs",
+    "segments",
+    "pit_histogram",
+    "gate"
+  ],
+  "title": "Calibration",
+  "type": "object"
+}

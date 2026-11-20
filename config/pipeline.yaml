@@ -171,3 +171,15 @@ sim:
   restart_gap_s: 0.5
   # Decimal places of exported draws: enough for lap times in ms, small enough for the browser.
   decimals: 4
+
+# Simulator validation (Phase 7): ex-ante simulations of every simulable race with the actual
+# strategies, scored against the official classification. The gate is in config/thresholds.yaml.
+sim_validation:
+  runs: 1000
+  seed: 20260307
+  # Start laps as shares of race distance: 0 is the end of lap 1, where every simulation can start.
+  start_fractions: [0, 0.25, 0.5, 0.75]
+  # Pseudo-count per outcome when turning simulated and baseline counts into probabilities: a
+  # finishing place no run produced must not score log(0).
+  smoothing: 0.5
+  pit_bins: 10

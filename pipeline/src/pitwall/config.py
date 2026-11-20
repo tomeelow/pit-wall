@@ -119,6 +119,24 @@ class SimConfig(_Config):
     decimals: int = Field(ge=1)
 
 
+class SimValidationConfig(_Config):
+    runs: int = Field(ge=1)
+    seed: int
+    start_fractions: list[float] = Field(min_length=1)
+    smoothing: float = Field(gt=0)
+    pit_bins: int = Field(ge=2)
+
+
+class SimulatorGate(_Config):
+    must_beat_baseline_from: float = Field(ge=0, le=1)
+    max_log_score_regression: float = Field(ge=0)
+    max_coverage_error_growth: float = Field(ge=0)
+
+
+class Thresholds(_Config):
+    simulator: SimulatorGate
+
+
 class PipelineConfig(_Config):
     data_dir: Path
     bundle_dir: Path
@@ -131,6 +149,7 @@ class PipelineConfig(_Config):
     events: EventsConfig
     traffic: TrafficConfig
     sim: SimConfig
+    sim_validation: SimValidationConfig
 
 
 class Era(_Config):
@@ -139,6 +158,7 @@ class Era(_Config):
     race_fuel_kg: float = Field(gt=0)
     min_dry_compounds: int = Field(ge=1)
     red_flag_free_tyre_change: bool
+    classified_fraction: float = Field(gt=0, le=1)
 
 
 class RaceRule(_Config):
@@ -157,6 +177,7 @@ class RaceRules(_Config):
     min_stops: int
     max_stint_laps: int | None
     red_flag_free_tyre_change: bool
+    classified_fraction: float
 
 
 class Regulations(_Config):
@@ -186,6 +207,7 @@ class Regulations(_Config):
         return RaceRules(
             min_dry_compounds=era.min_dry_compounds,
             red_flag_free_tyre_change=era.red_flag_free_tyre_change,
+            classified_fraction=era.classified_fraction,
             min_stops=rule.min_stops or 0,
             max_stint_laps=rule.max_stint_laps,
         )
@@ -243,6 +265,10 @@ def load_allocations(
                 raise ValueError(f"{season} round {race.round} allocated twice")
             allocations[(season, race.round)] = race
     return allocations
+
+
+def load_thresholds(path: Path = CONFIG_DIR / "thresholds.yaml") -> Thresholds:
+    return Thresholds.model_validate(yaml.safe_load(path.read_text()))
 
 
 def load_regulations(path: Path = CONFIG_DIR / "regulations.yaml") -> Regulations:

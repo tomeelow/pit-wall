@@ -12,6 +12,7 @@ export {
   DNF,
   DSQ,
   FINISHED,
+  isClassified,
   simulateRace,
   type Mode,
   type Trace,
@@ -20,3 +21,4 @@ export {
 export { mergeOutcomes, runSimulations, type Outcome, type Query } from "./montecarlo.ts";
 export { actualStrategies, compilePlan, prepare, type Prepared, type Strategy } from "./prepare.ts";
 export { Rng } from "./rng.ts";
+export { finishCounts, startLaps } from "./backtest.ts";

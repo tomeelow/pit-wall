@@ -1,4 +1,4 @@
-.PHONY: setup verify verify-pipeline verify-web bench replay contract contract-check ingest fit backtest fit-events validate-events fit-traffic validate-traffic export build dev
+.PHONY: setup verify verify-pipeline verify-web bench replay validate-sim contract contract-check ingest fit backtest fit-events validate-events fit-traffic validate-traffic export build dev
 
 PY := cd pipeline && uv run --frozen
 WEB := cd web && npm run -s
@@ -31,6 +31,11 @@ bench:
 # Zero-noise replay of every simulable race in the exported bundle (needs `make export`).
 replay:
 	cd web && $(NODE) scripts/replay.ts
+
+# Simulator calibration on the exported bundle, with the publish gate (config/thresholds.yaml).
+# Run `make export` before (sim inputs) and after (to publish the accepted calibration).
+validate-sim:
+	$(PY) pitwall validate-sim
 
 # Regenerate JSON Schema and TypeScript types after editing pipeline/src/pitwall/export/contract.py.
 contract:

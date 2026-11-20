@@ -5,10 +5,12 @@ from pathlib import Path
 
 import pandas as pd
 from loguru import logger
+from pydantic import ValidationError
 
 from pitwall.config import Regulations, SimConfig
 from pitwall.export.contract import (
     SCHEMA_VERSION,
+    Calibration,
     DriverRace,
     Manifest,
     Race,
@@ -71,6 +73,20 @@ def _write(bundle_dir: Path, relative: str, json: str) -> None:
     logger.info("exported {} ({} bytes)", relative, out.stat().st_size)
 
 
+def _publish_calibration(data_dir: Path, bundle_dir: Path) -> str | None:
+    """The accepted simulator calibration (`pitwall validate-sim`), if it matches this contract."""
+    source = data_dir / "models" / "sim" / "calibration.json"
+    if not source.exists():
+        return None
+    try:
+        calibration = Calibration.model_validate_json(source.read_text())
+    except ValidationError as error:
+        logger.warning("calibration not published, re-run validate-sim: {}", error)
+        return None
+    _write(bundle_dir, "calibration.json", calibration.model_dump_json())
+    return "calibration.json"
+
+
 def export_bundle(
     data_dir: Path, bundle_dir: Path, git_sha: str, sim: SimConfig, regulations: Regulations
 ) -> Manifest:
@@ -106,6 +122,7 @@ def export_bundle(
         git_sha=git_sha,
         generated_at=datetime.now(UTC),
         races=entries,
+        calibration_path=_publish_calibration(data_dir, bundle_dir),
     )
     bundle_dir.mkdir(parents=True, exist_ok=True)
     (bundle_dir / "manifest.json").write_text(manifest.model_dump_json(indent=2))

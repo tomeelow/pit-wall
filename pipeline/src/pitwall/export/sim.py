@@ -72,6 +72,7 @@ def snapshots(tables: RaceTables, drivers: list[str]) -> list[Snapshot]:
     time_at = {
         (str(r["driver"]), int(r["lap"])): float(r["race_time_s"])
         for r in tables.race_state.to_dict("records")
+        if pd.notna(r["race_time_s"])
     }
     out = []
     for lap in range(1, tables.event.total_laps):
@@ -122,6 +123,12 @@ def build_sim(
     # Simulations start after lap 1: a car that retired on lap 1 on unknown tyres never runs.
     if laps.loc[laps["lap"] > 1, "compound_c"].isna().any():
         raise NotSimulable("laps after the first without a C-number")
+    # A car with no time at the line on a lap it went on from would vanish from the simulation.
+    state = tables.race_state
+    last_lap = state.groupby("driver")["lap"].transform("max")
+    untimed = state[state["race_time_s"].isna() & (state["lap"] < last_lap)]
+    if not untimed.empty:
+        raise NotSimulable(f"no race time for running cars on {untimed['lap'].nunique()} laps")
 
     n, decimals = config.draws, config.decimals
     deg = pd.read_parquet(path / "degradation_draws.parquet")

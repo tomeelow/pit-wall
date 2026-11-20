@@ -252,6 +252,16 @@ export function simulateRace(
   classify(ws, n, rules.min_dry_compounds, rules.min_stops, rules.max_stint_laps);
 }
 
+/**
+ * In the official classification: took the flag, or retired after covering the classified share
+ * of the laps. A classified car's place is ws.position[i].
+ */
+export function isClassified(ws: Workspace, i: number, prepared: Prepared): boolean {
+  if (ws.status[i] === FINISHED) return true;
+  const needed = Math.floor(prepared.race.rules.classified_fraction * prepared.laps);
+  return ws.status[i] === DNF && ws.lapsDone[i]! >= needed;
+}
+
 function dirtyAir(bins: readonly { gap_upto_s: number; loss_s: number }[], gap: number): number {
   for (const bin of bins) if (gap <= bin.gap_upto_s) return bin.loss_s;
   return 0;

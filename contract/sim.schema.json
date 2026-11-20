@@ -275,7 +275,7 @@
     },
     "Rules": {
       "additionalProperties": false,
-      "description": "What every finishing strategy must satisfy; breaking a rule is a disqualification. A stop\nunder a red flag costs nothing when red_flag_free_tyre_change is set.",
+      "description": "What every finishing strategy must satisfy; breaking a rule is a disqualification. A stop\nunder a red flag costs nothing when red_flag_free_tyre_change is set. A car that retires is\nstill classified if it covered classified_fraction of the race's laps (rounded down).",
       "properties": {
         "min_dry_compounds": {
           "type": "integer"
@@ -295,13 +295,17 @@
         },
         "red_flag_free_tyre_change": {
           "type": "boolean"
+        },
+        "classified_fraction": {
+          "type": "number"
         }
       },
       "required": [
         "min_dry_compounds",
         "min_stops",
         "max_stint_laps",
-        "red_flag_free_tyre_change"
+        "red_flag_free_tyre_change",
+        "classified_fraction"
       ],
       "title": "Rules",
       "type": "object"
@@ -450,7 +454,7 @@
   "additionalProperties": false,
   "properties": {
     "schema_version": {
-      "const": "0.2.0",
+      "const": "0.3.0",
       "type": "string"
     },
     "season": {

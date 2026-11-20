@@ -57,6 +57,25 @@ press releases cited per season.
 
 The deploy workflow needs GitHub Pages set to deploy from GitHub Actions.
 
+## Simulator calibration
+
+`make validate-sim` (after `make export`) backtests the simulator. It covers every simulable race,
+from four points in the race, with the actual strategies and sampled safety cars and retirements.
+It scores whether the real result falls inside the simulated intervals as often as it should. A
+second `make export` publishes the accepted report. Full numbers are under Phase 7 →
+Findings in the [plan](docs/implementation_plan.md).
+
+Where it is **not** well calibrated:
+- **The last quarter of a race:** too confident. The real place falls inside the 50 % / 80 %
+  intervals 44 % / 71 % of the time.
+- **Races where a safety car, VSC or red flag actually happened** after the point simulated from:
+  too confident (44 % / 73 %). Ex ante those events are only sampled.
+- **Wet or mixed races:** not simulated at all. Neither is Miami 2025, where timing data is missing.
+
+Known softening: pace and degradation are fitted on the whole race, the simulated one included.
+Random events (safety cars, retirements) never are. Opponents keep their actual strategies
+(open loop).
+
 ## Data sources
 
 [OpenF1](https://openf1.org), with [Jolpica](https://github.com/jolpica/jolpica-f1) planned for

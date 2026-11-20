@@ -131,6 +131,10 @@ def test_races_the_engine_cannot_run_are_refused(
     laps.loc[laps["lap"] == 10, "compound"] = "INTERMEDIATE"
     with pytest.raises(NotSimulable, match="wet"):
         build(race_folder, replace(race_tables, laps=laps))
+    state = race_tables.race_state.copy()
+    state.loc[(state["driver"] == "VER") & (state["lap"] == 20), "race_time_s"] = float("nan")
+    with pytest.raises(NotSimulable, match="no race time"):
+        build(race_folder, replace(race_tables, race_state=state))
     unfitted = write_race(tmp_path / "unfitted", race_tables)
     with pytest.raises(NotSimulable, match="no degradation_draws"):
         build(unfitted, race_tables)

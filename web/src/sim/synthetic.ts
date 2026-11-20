@@ -33,7 +33,7 @@ export function syntheticRace(options: SyntheticOptions = {}): SimRace {
   const firstStint = (i: number) => (i % 2 === 0 ? 2 : 1);
   const stopLap = Math.floor(laps / 2);
   return {
-    schema_version: "0.2.0",
+    schema_version: "0.3.0",
     season: 2024,
     round: 1,
     name: "Synthetic Grand Prix",
@@ -46,6 +46,7 @@ export function syntheticRace(options: SyntheticOptions = {}): SimRace {
       min_stops: 0,
       max_stint_laps: null,
       red_flag_free_tyre_change: true,
+      classified_fraction: 0.9,
     },
     mechanics: { follow_gap_s: 0.2, restart_gap_s: 0.5 },
     compounds,

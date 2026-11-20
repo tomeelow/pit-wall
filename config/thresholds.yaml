@@ -1,0 +1,11 @@
+# Publish gate for the simulator's calibration (plan Phase 7, applied by the weekend workflow in
+# Phase 11). A run that fails keeps the previously accepted calibration and parameters live.
+simulator:
+  # From this share of race distance on, the simulator must beat "finish = position at the start
+  # lap" on mean log score: from mid-race it has to know more than the running order.
+  must_beat_baseline_from: 0.5
+  # Largest acceptable fall in overall mean log score against the accepted calibration, nats per car.
+  max_log_score_regression: 0.02
+  # Largest acceptable growth of |coverage - nominal| for the 50 % and 80 % intervals against the
+  # accepted calibration.
+  max_coverage_error_growth: 0.03
