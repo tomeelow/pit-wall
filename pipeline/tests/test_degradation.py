@@ -78,7 +78,9 @@ def synthetic_laps(seed: int = 0) -> pd.DataFrame:
 
 @pytest.fixture(scope="module")
 def synthetic_fit() -> Fit:
-    return fit(synthetic_laps(), ERA, FAST, REGULATIONS.fuel_effect_s_per_kg)
+    # Production sampler settings: the gate this fit must pass is the production gate, and at
+    # 600 draws R-hat on slope_c (4 tracks only) lands either side of 1.01 depending on the seed.
+    return fit(synthetic_laps(), ERA, CONFIG.degradation, REGULATIONS.fuel_effect_s_per_kg)
 
 
 def test_fuel_burn_is_not_mistaken_for_negative_degradation(synthetic_fit: Fit) -> None:
