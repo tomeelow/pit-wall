@@ -1,4 +1,4 @@
-.PHONY: setup verify verify-pipeline verify-web contract contract-check ingest export build dev
+.PHONY: setup verify verify-pipeline verify-web contract contract-check ingest fit backtest export build dev
 
 PY := cd pipeline && uv run --frozen
 WEB := cd web && npm run -s
@@ -40,6 +40,14 @@ contract-check:
 ingest:
 	@test -n "$(SEASON)" || { echo "usage: make ingest SEASON=2024 [ROUND=1]"; exit 2; }
 	$(PY) pitwall ingest --season $(SEASON) $(if $(ROUND),--round $(ROUND))
+
+# Fit the degradation model per era (ERA=2026 for one) and export draws if the gate passes.
+fit:
+	$(PY) pitwall fit-degradation $(if $(ERA),--era $(ERA))
+
+# Leave-one-race-out over config/pipeline.yaml → degradation.backtest.races. Slow: one refit each.
+backtest:
+	$(PY) pitwall backtest-degradation
 
 export:
 	$(PY) pitwall export

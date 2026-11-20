@@ -23,7 +23,7 @@ Update this table as phases land. It is the first thing to read when picking up 
 | 0 — Setup, ADRs, contract skeleton | ☑ done | OpenF1 ingest verified on 2024 R1–R2; stint chart checked in the browser. Pages deploy runs from `main` once Pages is set to GitHub Actions |
 | 1 — Ingestion | ☑ done | 90 races (2023 R1 – 2026 R20) ingested, 0 rejected; allocations sourced from Pirelli releases. Known source gaps listed under Phase 1 → Findings |
 | 2 — Lap classification & race state | ☑ done | 90 races rebuilt, 50.5 % of 100,749 laps clean; race-state order matches OpenF1's position feed on ≥ 98 % of driver-laps in every race. Simplifications and data quirks under Phase 2 → Findings |
-| 3 — Tyre degradation model | ☐ not started | |
+| 3 — Tyre degradation model | ☑ done | Both era fits pass the gate; draws per race in `.data`. LORO: model beats the flat-median baseline only modestly (MAE 0.725 vs 0.758 s); details and the weak-OLS caveat under Phase 3 → Findings |
 | 4 — Pit loss, SC/VSC, reliability | ☐ not started | |
 | 5 — Traffic & overtaking | ☐ not started | |
 | 6 — Simulation engine | ☐ not started | |
@@ -373,6 +373,66 @@ distribution.
 
 **Deliverable:** `models/degradation.py`, LORO backtest table vs both baselines, diagnostics report,
 exported draws per race via the contract.
+
+### Findings (first fit, 2023 R1 – 2026 R20)
+
+**Fits.** One model per era (`make fit`, nutpie, 4 × 1000/1000, `target_accept` 0.95). Both pass the
+gate:
+
+| Era | Clean laps | Races | Left out | max R̂ | ESS bulk / tail | Divergences | fuel effect (s/kg) |
+|---|---|---|---|---|---|---|---|
+| 2023–2025 | 39,041 | 69 | C6 (one race) | 1.006 | 749 / 1117 | 0 | 0.0291 (0.0289–0.0293) |
+| 2026 | 11,829 | 20 | — | 1.005 | 1253 / 1042 | 0 | 0.0438 |
+
+- Fuel effect is near the physics prior in 2023–25. In 2026 the data identify fuel_effect × race fuel
+  mass; the 70 kg figure is **unverified** (secondary source; the FIA regulations cap energy flow,
+  not race fuel mass), so read 0.044 s/kg as "≈ 3.1 s over a race" (2023–25: ≈ 3.2 s).
+- Era-level slopes (s/lap), 2023–25: C1 0.047, C2 0.037, C3 0.054, C4 0.054, C5 0.068. 2026: C1
+  0.070, C2 0.049, C3 0.078, C4 0.062, C5 0.033. These are not "C5 wears least in 2026". Each C-number
+  is raced at a different set of tracks, and the era level averages over those tracks. Use the
+  track-level slopes.
+- A C-number needs clean laps from ≥ `min_compound_races` (2) races. With only one race, its offset
+  and slope cannot be separated from that race's level. Before this rule (and a per-race level
+  term), C6 got a −0.23 s/lap slope and a +9 s offset.
+- **No curvature:** median residual by tyre-age bin is ≈ 0 for every compound in the 30+ lap bin.
+  Linear degradation stays.
+- **Warm-up is visible:** 2023–25 C2 is −0.11 s in the first 5 laps; 2026 C4 is +0.16 s and C5
+  +0.10 s. Warm-up and the out-lap term move to Phase 4 alongside pit loss, where the undercut needs
+  them.
+- Posterior predictive checks so far are the residual-by-age table in each model card, not plots.
+- Draws: 200 per race in `.data/races/*/degradation_draws.parquet` for every race except 2024 R21,
+  which has no clean laps. They are not in the contract yet; that is Phase 6.
+
+**Leave-one-race-out** (`make backtest`, 15 races in config, ~2 h locally). Every held-out stint
+is a forecast: each method sees only the stint's first 3 clean laps and predicts the rest.
+
+| Method | MAE (s) | RMSE (s) |
+|---|---|---|
+| stint median of anchor laps (flat) | 0.758 | 1.096 |
+| OLS through anchor laps | 2.938 | 5.003 |
+| **model** (anchor level + posterior slope and fuel) | **0.725** | **1.014** |
+
+7,482 laps; 531 stints.
+
+- **The model beats OLS by a wide margin, but that is a weak test.** A line through 3 noisy laps
+  extrapolates its noise (RMSE 9.3 s at 20+ laps ahead). The honest comparison is the flat median.
+- **Against the flat median, the gain is small:** −4 % MAE and −7 % RMSE overall. By horizon:
+  - ≤ 5 laps ahead: 0.449 vs 0.458;
+  - 20+ laps ahead: 1.200 vs 1.289.
+
+  The model is better on 55 % of stints. It is worse in 6 of the 15 held-out races (2024-12,
+  2025-07, 2025-14, 2025-16, 2026-06, 2026-13). The reason: fuel burn-off (≈ −0.06 s/lap) roughly
+  cancels wear (≈ +0.05 s/lap), so most stints are close to flat. Most of the forecast error is
+  lap-to-lap noise that no pace model removes.
+- What the model adds is the split into wear and fuel. Flat-median and OLS baselines cannot provide
+  this, and a strategy simulator needs it: changing stint length changes tyre age without changing
+  the fuel curve.
+- The backtest refits use a lighter sampler (500/500) to keep the run to ~2 h. R̂ was 1.010–1.022
+  and bulk ESS 295–632, below the publish gate. That is enough for the posterior means scored here.
+  These refits are never published.
+- Not yet tested: a non-Bayesian baseline using the training races' pooled slope per C-number. It
+  would show whether the hierarchy (track and team levels) earns its keep, not just the fuel/wear
+  split.
 
 ---
 
