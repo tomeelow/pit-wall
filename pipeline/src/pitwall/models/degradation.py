@@ -27,14 +27,12 @@ import numpy as np
 import nutpie
 import pandas as pd
 import pymc as pm
-import pytensor.tensor as pt
 import xarray as xr
 from pydantic import BaseModel
-from pytensor.tensor.variable import TensorVariable
 
 from pitwall.config import DegradationConfig, Era, NormalPrior
 from pitwall.ingest.storage import RaceTables, dataset_fingerprint
-from pitwall.models.sampling import Diagnostics, sample
+from pitwall.models.sampling import Diagnostics, sample, zero_sum_deviation
 
 GROUPS: dict[str, tuple[str, ...]] = {
     "c": ("compound_c",),
@@ -51,6 +49,11 @@ def race_id(season: int, round_: int) -> str:
     return f"{season}-{round_:02d}"
 
 
+def fuel_kg(lap: pd.Series, total_laps: int, race_fuel_kg: float) -> pd.Series:
+    """Fuel on board at mid-lap, burning linearly over the scheduled distance."""
+    return race_fuel_kg * (1 - (lap - 0.5) / total_laps)
+
+
 def training_laps(races: list[RaceTables], era: Era) -> pd.DataFrame:
     """Clean laps of the era's races, with the covariates the model uses."""
     frames = []
@@ -60,7 +63,6 @@ def training_laps(races: list[RaceTables], era: Era) -> pd.DataFrame:
         laps = tables.laps[tables.laps["lap_class"] == "clean"]
         if laps.empty:
             continue
-        progress = (laps["lap"] - 0.5) / tables.event.total_laps
         frames.append(
             pd.DataFrame(
                 {
@@ -73,7 +75,7 @@ def training_laps(races: list[RaceTables], era: Era) -> pd.DataFrame:
                     "lap": laps["lap"].astype("int64"),
                     "tyre_age": laps["tyre_age"].astype("int64"),
                     "lap_time_s": laps["lap_time_s"],
-                    "fuel_kg": era.race_fuel_kg * (1 - progress),
+                    "fuel_kg": fuel_kg(laps["lap"], tables.event.total_laps, era.race_fuel_kg),
                     "race_median_s": laps["lap_time_s"].median(),
                 }
             )
@@ -124,34 +126,6 @@ class Groups:
         return {name: range(len(found)) for name, found in self.positions.items()}
 
 
-def _zero_sum_deviation(
-    name: str, sd: TensorVariable, segment: np.ndarray, segments: int
-) -> TensorVariable:
-    """Normal deviations with scale `sd` that sum to zero within each segment.
-
-    A segment of k members gets k - 1 free standard normals mapped through a Helmert basis, which
-    is distributed exactly as k iid normals minus their mean but leaves no direction that only
-    the prior constrains. Without the constraint a parent and the mean of its few children trade
-    off along a ridge the sampler crosses slowly (R-hat > 1.01)."""
-    rows, cols, values = [], [], []
-    free = 0
-    for s in range(segments):
-        members = np.flatnonzero(segment == s)
-        for j in range(1, len(members)):
-            scale = 1 / np.sqrt(j * (j + 1))
-            rows += list(members[: j + 1])
-            cols += [free] * (j + 1)
-            values += [scale] * j + [-j * scale]
-            free += 1
-    if free == 0:  # every segment has a single member: nothing can deviate
-        return pt.zeros(len(segment))
-    z = pm.Normal(name, 0, 1, shape=free)
-    weights = np.array(values)
-    return sd * pt.zeros(len(segment))[np.array(rows, dtype=int)].inc(
-        weights * z[np.array(cols, dtype=int)]
-    )
-
-
 def build_model(
     laps: pd.DataFrame, groups: Groups, config: DegradationConfig, fuel: NormalPrior
 ) -> pm.Model:
@@ -163,11 +137,11 @@ def build_model(
         track_sd = pm.HalfNormal("slope_track_sd", p.slope_track_sd)
         team_sd = pm.HalfNormal("slope_team_sd", p.slope_team_sd)
         track_of = g.parent("track_c", "c")
-        slope_track = slope_c[track_of] + _zero_sum_deviation(
+        slope_track = slope_c[track_of] + zero_sum_deviation(
             "slope_track_z", track_sd, track_of, len(g.positions["c"])
         )
         team_of = g.parent("track_c_team", "track_c")
-        slope_team = slope_track[team_of] + _zero_sum_deviation(
+        slope_team = slope_track[team_of] + zero_sum_deviation(
             "slope_team_z", team_sd, team_of, len(g.positions["track_c"])
         )
         pm.Deterministic("slope_track", slope_track, dims="track_c")
@@ -175,7 +149,7 @@ def build_model(
 
         offset_c = pm.ZeroSumNormal("offset_c", p.compound_offset_sd, dims="c")
         offset_race_sd = pm.HalfNormal("offset_race_sd", p.compound_track_sd)
-        deviation = _zero_sum_deviation(
+        deviation = zero_sum_deviation(
             "offset_race_z", offset_race_sd, g.parent("race_c", "race"), len(g.positions["race"])
         )
         offset_race = offset_c[g.parent("race_c", "c")] + deviation

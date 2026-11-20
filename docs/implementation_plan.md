@@ -25,7 +25,7 @@ Update this table as phases land. It is the first thing to read when picking up 
 | 2 — Lap classification & race state | ☑ done | 90 races rebuilt, 50.5 % of 100,749 laps clean; race-state order matches OpenF1's position feed on ≥ 98 % of driver-laps in every race. Simplifications and data quirks under Phase 2 → Findings |
 | 3 — Tyre degradation model | ☑ done | Both era fits pass the gate; draws per race in `.data`. LORO: model beats the flat-median baseline only modestly (MAE 0.725 vs 0.758 s); details and the weak-OLS caveat under Phase 3 → Findings |
 | 4 — Pit loss, SC/VSC, reliability | ☑ done | Pit loss per track (green 19–28 s; SC/VSC factors per era: 0.68/0.84× in 2023–25, ~0.95× in 2026), SC/VSC/red/DNF rates per race with that race masked out; per-track rates barely beat era-wide. 2026 rebuilt with VSCs. Phase 4 → Findings |
-| 5 — Traffic & overtaking | ☐ not started | |
+| 5 — Traffic & overtaking | ☑ done | Dirty air only matters within 0.5 s (0.47 s/lap); pass model (gap, pace delta, within 1 s, track) beats the gap-only baseline out of sample (log loss 0.134 vs 0.173) and is well calibrated 1–70 %; under-predicts passes from 1.5–3 s back. Phase 5 → Findings |
 | 6 — Simulation engine | ☐ not started | |
 | 7 — Simulator validation | ☐ not started | |
 | 8 — Strategy optimiser, counterfactuals, undercut | ☐ not started | |
@@ -601,6 +601,99 @@ training races with at least one.
 the pass probability.
 
 **Deliverable:** `models/traffic.py`, exported per-track parameters, calibration plot.
+
+### Findings (first fit, 2023 R1 – 2026 R20)
+
+Code: `pitwall.models.traffic`. Commands: `make fit-traffic` (run after `make fit`, because pace
+comes from the degradation draws) and `make validate-traffic`. Settings are under
+`config/pipeline.yaml` → `traffic`.
+
+Outputs per race in `.data/races/*/`:
+- `traffic_draws.parquet`: 200 draws of the track's intercept and the era's coefficients;
+- `traffic.json`: the era's dirty-air table and the gap thresholds.
+
+Not in the contract yet; that is Phase 6.
+
+**Data: lap pairs.** Each row is a car and the car directly ahead of it in the running order at the
+start of a lap, on the same lap. 92,401 pairs. A pair's lap is usable only if it can be decided on
+track:
+- neither car pits (in-lap or out-lap);
+- the lap is green: no SC, VSC, red flag or yellow;
+- it is dry and not lap 1;
+- both cars have a free-air pace prediction from the degradation draws.
+
+So pit cycles, retirements, penalties and lap-1 chaos never enter the data. The pass model trains
+on 41,823 usable pairs within 3 s at the start of the lap (2,594 passes).
+
+**Dirty air.** This is the time lost relative to the car's own free-air prediction. It is measured
+only on laps where the car ahead is predicted to be at least as fast, so the car behind is not being
+held up:
+
+| Gap at start (s) | 2023–25 loss (s/lap) | 2026 loss (s/lap) |
+|---|---|---|
+| ≤ 0.5 | 0.47 | 0.37 |
+| 0.5–2.0 | 0.05–0.06 | −0.05–0.02 |
+| > 2.0 | ≈ 0 | ≈ 0 |
+
+- Pure aero loss only matters very close behind.
+- Across all traffic laps, the raw excess is much larger: 0.60 / 0.30 / 0.17 s in the first three
+  bins. That is cars held up behind slower ones. The simulator gets that from the pass model, by
+  keeping a car behind until it passes, not from this table.
+- Dirty air is per era, not per track. The per-track bins are too thin.
+
+**Pass model.** The probability that the car behind is ahead at the end of the lap:
+
+    logit P = intercept[era] + track[track] + beta[era] · (gap, pace delta, within 1 s)
+
+- **Features:** gap is in seconds at the start of the lap. Pace delta is predicted free-air lap time
+  ahead minus behind. "Within 1 s" stands for DRS in 2023–25 and overtake mode in 2026.
+- **Track effects** are partially pooled and zero-sum. The era intercepts are shared across tracks.
+- **Fit:** nutpie, 4 × 2000 draws. Features are centred: without that, the intercept (at zero gap)
+  traded off with the gap and DRS slopes, R̂ 1.015.
+- Full fit: R̂ 1.005, ESS 1119, no divergences.
+- **Coefficients** (logit, per second):
+
+  | Era | Gap | Pace delta |
+  |---|---|---|
+  | 2023–25 | −4.06 | +1.82 |
+  | 2026 | −3.70 | +1.23 |
+
+  2026 passes depend less on raw pace.
+- **"Within 1 s" is negative (−1.0).** It absorbs the curvature that a straight line in gap misses.
+  The extra pass chance from being within a second is in the steep gap slope, not in this term.
+- **Track effects** run from Monaco −3.4 (about 30× lower odds), Madring −1.2 and Singapore −0.8 to
+  Yas Marina +1.0, Austin +0.8 and Shanghai +0.8.
+- **Information set:** the pass model is fitted on every race, including the one being simulated.
+  This is the same documented softening as pace: passability is a property of track and cars, not
+  a sampled random event. A masked refit per race would take about 80 minutes. Validation below
+  holds out whole seasons, so the reported calibration does not benefit from it.
+
+**Validation** (`validate-traffic`, leave one season out, 2023–2025; 33,538 held-out pairs). The
+baseline is the training pass rate in the same era and gap bin.
+
+| | Model | Baseline |
+|---|---|---|
+| Log loss | 0.134 | 0.173 |
+| Brier | 0.037 | 0.048 |
+| Passes expected / observed | 1,985 / 1,978 | — |
+
+- **The model beats the baseline in every held-out season**, and the per-track log loss beats it at
+  23 of 24 tracks.
+- **Reliability is good from 1 % to 70 %.** Mean predicted vs observed frequency per bin:
+  - 0.015 / 0.013
+  - 0.071 / 0.062
+  - 0.142 / 0.144
+  - 0.385 / 0.391
+  - 0.687 / 0.693
+- **Miscalibration 1 — long gaps.** Pairs 1.5–3 s apart pass more than predicted: 52 passes
+  against 19 expected, over 12,875 pairs. A logit linear in gap is too steep in its tail, so
+  passes there (mistakes, incidents) are under-sampled.
+- **Miscalibration 2 — some tracks.** Monaco has 13 passes against 25 expected, and Monza 81
+  against 106: the model is too generous. Mexico City has 124 against 95: too stingy. With 3
+  races per track, these are partly noise.
+- The calibration "plot" is the reliability table in `.data/models/traffic/validation.md`. A
+  rendered figure comes with the model card in the UI.
+- **Defending cost:** not modelled. Add it only if Phase 7 calibration needs it.
 
 ---
 
