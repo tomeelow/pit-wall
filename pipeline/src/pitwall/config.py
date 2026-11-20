@@ -25,6 +25,52 @@ class ClassificationConfig(_Config):
     max_yellow_s: float = Field(gt=0)
 
 
+class NormalPrior(_Config):
+    mean: float
+    sd: float = Field(gt=0)
+
+
+class SamplerConfig(_Config):
+    chains: int = Field(ge=1)
+    tune: int = Field(ge=1)
+    draws: int = Field(ge=1)
+    target_accept: float = Field(gt=0, lt=1)
+    seed: int
+
+
+class DegradationPriors(_Config):
+    slope_s_per_lap: NormalPrior
+    slope_track_sd: float = Field(gt=0)
+    slope_team_sd: float = Field(gt=0)
+    compound_offset_sd: float = Field(gt=0)
+    compound_track_sd: float = Field(gt=0)
+    race_level_sd: float = Field(gt=0)
+    pace_sd: float = Field(gt=0)
+    noise_sd: float = Field(gt=0)
+
+
+class GateConfig(_Config):
+    max_rhat: float = Field(gt=1)
+    min_ess: float = Field(gt=0)
+    max_divergences: int = Field(ge=0)
+
+
+class BacktestConfig(_Config):
+    sampler: SamplerConfig
+    anchor_laps: int = Field(ge=2)
+    min_forecast_laps: int = Field(ge=1)
+    races: list[tuple[int, int]] = Field(min_length=1)
+
+
+class DegradationConfig(_Config):
+    sampler: SamplerConfig
+    min_compound_races: int = Field(ge=1)
+    export_draws: int = Field(ge=1)
+    priors: DegradationPriors
+    gate: GateConfig
+    backtest: BacktestConfig
+
+
 class PipelineConfig(_Config):
     data_dir: Path
     bundle_dir: Path
@@ -33,6 +79,31 @@ class PipelineConfig(_Config):
     min_hours_after_race: float = Field(ge=0)
     validation: ValidationConfig
     classification: ClassificationConfig
+    degradation: DegradationConfig
+
+
+class Era(_Config):
+    name: str
+    seasons: list[int] = Field(min_length=1)
+    race_fuel_kg: float = Field(gt=0)
+
+
+class Regulations(_Config):
+    eras: list[Era]
+    fuel_effect_s_per_kg: NormalPrior
+
+    @model_validator(mode="after")
+    def _disjoint(self) -> "Regulations":
+        seasons = [s for era in self.eras for s in era.seasons]
+        if len(seasons) != len(set(seasons)):
+            raise ValueError("a season belongs to more than one era")
+        return self
+
+    def era(self, name: str) -> Era:
+        return next(era for era in self.eras if era.name == name)
+
+    def era_of(self, season: int) -> Era:
+        return next(era for era in self.eras if season in era.seasons)
 
 
 class RaceAllocation(_Config):
@@ -87,3 +158,9 @@ def load_allocations(
                 raise ValueError(f"{season} round {race.round} allocated twice")
             allocations[(season, race.round)] = race
     return allocations
+
+
+def load_regulations(path: Path = CONFIG_DIR / "regulations.yaml") -> Regulations:
+    raw = yaml.safe_load(path.read_text())
+    eras = [{"name": name, **era} for name, era in raw.pop("eras").items()]
+    return Regulations.model_validate({"eras": eras, **raw})

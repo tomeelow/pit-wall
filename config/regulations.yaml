@@ -1,0 +1,20 @@
+# Regulation eras. Pace and degradation are fitted per era; nothing pools across the boundary.
+eras:
+  "2023-2025":
+    seasons: [2023, 2024, 2025]
+    # Maximum fuel at the start of a race, kg (110 kg since 2019).
+    # Source: https://www.autosport.com/f1/news/151295/how-much-fuel-does-a-formula-1-car-use
+    race_fuel_kg: 110
+  "2026":
+    seasons: [2026]
+    # UNVERIFIED. Secondary source only: https://f1chronicle.com/f1-fuel-flow-2026-explained
+    # (2026-03-04, no article cited). The FIA 2026 Technical Regulations (Section C, Issue 14,
+    # 2025-10-16) limit fuel energy flow (C5.2.3: 3000 MJ/h) but state no race fuel mass.
+    race_fuel_kg: 70
+
+# Lap-time cost of carrying fuel, s per kg per lap: Normal(mean, sd) prior. An engineering rule of
+# thumb (~0.3 s per 10 kg), not an FIA figure; the sd keeps it a prior, not a constant.
+# Source: https://www.autosport.com/f1/news/how-much-fuel-does-a-formula-1-car-use-f1-nascar-more-compared-4980266/4980266/
+fuel_effect_s_per_kg:
+  mean: 0.03
+  sd: 0.01

@@ -29,3 +29,65 @@ classification:
   # A sector yellow lasts at most this long (s). Some yellows are never cleared in race control
   # and would otherwise cover the rest of the race; the longest cleared one in 2024 was 827 s.
   max_yellow_s: 900
+
+# Tyre degradation model (Phase 3). Fitted on `clean` dry laps with a C-number, per era.
+degradation:
+  sampler:
+    chains: 4
+    tune: 1000
+    draws: 1000
+    # Above the 0.8 default: the hierarchy's scale terms form funnels that diverge at 0.8.
+    target_accept: 0.95
+    seed: 20260301
+  # A C-number is modelled only with clean laps from at least this many races of the era. With
+  # one race its era and race terms can't be told apart (2025 Monaco's C6: 13 laps); races using
+  # it get no draws for that C-number rather than a guess.
+  min_compound_races: 2
+  # Posterior draws exported per race; each simulator run samples one.
+  export_draws: 200
+  # Prior scales (s). Slope priors are the same for every C-number: the data, not us, order them.
+  priors:
+    slope_s_per_lap: {mean: 0.05, sd: 0.1}
+    slope_track_sd: 0.05     # half-normal scale: track deviation from the era/C-number slope
+    slope_team_sd: 0.03      # half-normal scale: team deviation from the track slope
+    compound_offset_sd: 1.0  # era-level C-number offset
+    compound_track_sd: 0.5   # half-normal scale: race deviation from the era offset
+    race_level_sd: 5.0       # race level, relative to the race's median clean lap
+    pace_sd: 1.0             # half-normal scale: driver spread around the race level
+    noise_sd: 0.5            # half-normal scale of the per-race lap noise
+  # Publish gate: a fit failing any of these is not exported; previous draws stay live.
+  gate:
+    max_rhat: 1.01
+    min_ess: 400
+    max_divergences: 0
+  # Leave-one-race-out: every method sees the first `anchor_laps` clean laps of each held-out
+  # stint and forecasts the rest (stints need at least `min_forecast_laps` more clean laps).
+  backtest:
+    # Same model and sampler, fewer draws: forecasts use posterior means, and 15 full-length
+    # refits would take hours. Each refit's diagnostics are reported, not gated.
+    sampler:
+      chains: 4
+      tune: 500
+      draws: 500
+      target_accept: 0.95
+      seed: 20260301
+    anchor_laps: 3
+    min_forecast_laps: 3
+    # Fixed, stratified: both eras, high and low degradation, street tracks, red flags, mixed
+    # weather. Changing it changes the reported numbers; never pick races to flatter the model.
+    races:
+      - [2023, 1]    # Bahrain: high degradation
+      - [2023, 3]    # Australia: three red flags
+      - [2023, 17]   # Qatar: high degradation
+      - [2024, 8]    # Monaco: low degradation
+      - [2024, 10]   # Spain
+      - [2024, 12]   # Britain: mixed weather
+      - [2024, 13]   # Hungary
+      - [2024, 18]   # Singapore: street
+      - [2025, 7]    # Emilia Romagna
+      - [2025, 14]   # Hungary
+      - [2025, 16]   # Italy: low degradation
+      - [2025, 22]   # Las Vegas: street, cold
+      - [2026, 6]    # Monaco
+      - [2026, 11]   # Hungary
+      - [2026, 13]   # Italy: red flag
