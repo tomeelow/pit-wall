@@ -13,3 +13,19 @@ validation:
   # (SC, pit, red flag); the bounds only catch timing garbage.
   lap_time_min_factor: 0.9
   lap_time_max_factor: 5.0
+  # Share of driver-laps whose reconstructed position must match OpenF1's position feed at the
+  # line; below it the race state is reported as suspect.
+  min_position_agreement: 0.95
+  # OpenF1's position feed updates up to a second or two after the line; probe it this late.
+  position_lag_s: 1.0
+
+# Lap classification (Phase 2). Initial values: tune with evidence, never to flatter a model.
+classification:
+  # A lap started within this gap (s) to the car physically ahead, at the line, is a traffic lap.
+  traffic_gap_s: 1.5
+  # After every other class is removed, a lap slower than this x the driver's stint median is an
+  # outlier (mistakes, damage, unflagged incidents).
+  outlier_factor: 1.05
+  # A sector yellow lasts at most this long (s). Some yellows are never cleared in race control
+  # and would otherwise cover the rest of the race; the longest cleared one in 2024 was 827 s.
+  max_yellow_s: 900

@@ -22,7 +22,7 @@ Update this table as phases land. It is the first thing to read when picking up 
 |---|---|---|
 | 0 — Setup, ADRs, contract skeleton | ☑ done | OpenF1 ingest verified on 2024 R1–R2; stint chart checked in the browser. Pages deploy runs from `main` once Pages is set to GitHub Actions |
 | 1 — Ingestion | ☑ done | 90 races (2023 R1 – 2026 R20) ingested, 0 rejected; allocations sourced from Pirelli releases. Known source gaps listed under Phase 1 → Findings |
-| 2 — Lap classification & race state | ☐ not started | |
+| 2 — Lap classification & race state | ☑ done | 90 races rebuilt, 50.5 % of 100,749 laps clean; race-state order matches OpenF1's position feed on ≥ 98 % of driver-laps in every race. Simplifications and data quirks under Phase 2 → Findings |
 | 3 — Tyre degradation model | ☐ not started | |
 | 4 — Pit loss, SC/VSC, reliability | ☐ not started | |
 | 5 — Traffic & overtaking | ☐ not started | |
@@ -292,6 +292,35 @@ initial condition for every "what if from lap N" query.
 **Deliverable:** `classify_laps()` with tests covering each class, a race with SC + VSC, a race with
 a red flag, and a driver who retires; a race-state snapshot table whose lap-N state reproduces the
 official lap-N order.
+
+### Findings (from the first full classification)
+
+Implemented in `pitwall.laps` (classes), `pitwall.race_state` (snapshots) and `pitwall.prepare`
+(runs both after validation). Thresholds live in `config/pipeline.yaml` → `classification`.
+
+- **Race state is rebuilt from line crossings** (next lap's `date_start`, else start + lap time).
+  `check_prepared` compares it with OpenF1's `/position` feed 1 s after each crossing: every race
+  agrees on ≥ 98 % of driver-laps (lowest 2025 R6, 98.1 %); below `min_position_agreement` (0.95)
+  is a warning.
+- **Class shares across 90 races / 100,749 laps:** clean 50.5 %, traffic 29.2 %, neutralised
+  4.9 %, wet 3.6 %, in-lap 3.3 %, yellow 3.2 %, out-lap 3.2 %, lap1 1.8 %, outlier 0.3 %. Clean
+  laps sit within 0.992–1.013 × their stint median (5–95 %).
+- **`yellow` is time-based for every driver.** Marshal sectors are not mapped to track position
+  yet, so any local yellow anywhere marks the lap for the whole field — conservative.
+- **Some sector yellows are never cleared** in race control (11 races, e.g. 2023 R4, 2025 R6,
+  2025 R15). A yellow counts for at most `max_yellow_s` (900 s) and is reported as a warning;
+  before the cap three of these races had zero clean laps.
+- **2026 red flags are text-only** ("RED FLAG - RACE SUSPENDED", no Track RED flag). A red starts
+  on that text, a Track RED flag or `SESSION ABORTED`; it ends at `SESSION STARTED` or an SC
+  restart. `TRACK CLEAR` during a suspension does not end it (2026 R13 previously read as SC to
+  the flag).
+- **In-laps are inferred** from the next lap being an out-lap, which covers 2023 R1–R6 (no pit
+  records).
+- **`wet` comes from the compound only**; there is no rain flag in the classification.
+- **Rolling restarts behind the safety car** after a red flag have no SC messages; those slow laps
+  fall to `outlier`, not `neutralised`.
+- **2024 R21 (São Paulo)** is 80 % wet and has no clean laps — correct.
+- `race_state` is a canonical table now; exporting it to the web contract is Phase 6 work.
 
 ---
 

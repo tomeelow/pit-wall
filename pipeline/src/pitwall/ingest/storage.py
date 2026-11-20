@@ -7,7 +7,7 @@ from pathlib import Path
 import pandas as pd
 from pydantic import BaseModel, ConfigDict
 
-TABLES = ("laps", "results", "pits", "neutralisations")
+TABLES = ("laps", "results", "pits", "neutralisations", "yellows", "positions", "race_state")
 
 
 class EventInfo(BaseModel):
@@ -29,6 +29,9 @@ class RaceTables:
     results: pd.DataFrame
     pits: pd.DataFrame
     neutralisations: pd.DataFrame
+    yellows: pd.DataFrame
+    positions: pd.DataFrame
+    race_state: pd.DataFrame
 
     def fingerprint(self) -> str:
         return dataset_fingerprint(*(getattr(self, name) for name in TABLES))

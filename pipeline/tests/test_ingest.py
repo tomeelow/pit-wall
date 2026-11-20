@@ -11,7 +11,13 @@ from pitwall.ingest.openf1 import (
     find_race_session,
     finished_rounds,
 )
-from pitwall.ingest.storage import RaceTables, dataset_fingerprint, read_race, write_race
+from pitwall.ingest.storage import (
+    TABLES,
+    RaceTables,
+    dataset_fingerprint,
+    read_race,
+    write_race,
+)
 from tests.conftest import canonical, openf1_race
 
 
@@ -203,7 +209,7 @@ def test_fingerprint_is_deterministic_and_content_sensitive(race_tables: RaceTab
 
 def test_race_survives_parquet_round_trip(race_tables: RaceTables, tmp_path) -> None:
     restored = read_race(write_race(tmp_path, race_tables))
-    for name in ("laps", "results", "pits", "neutralisations"):
+    for name in TABLES:
         pd.testing.assert_frame_equal(getattr(restored, name), getattr(race_tables, name))
     assert restored.event == race_tables.event
     assert restored.fingerprint() == race_tables.fingerprint()

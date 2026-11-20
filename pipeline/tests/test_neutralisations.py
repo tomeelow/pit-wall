@@ -1,7 +1,7 @@
 import pandas as pd
 
-from pitwall.ingest.neutralisations import parse_neutralisations
-from tests.conftest import message
+from pitwall.ingest.neutralisations import parse_neutralisations, parse_yellows
+from tests.conftest import RACE_START, message
 
 
 def periods(*messages: dict) -> tuple[list[tuple], list[str]]:
@@ -10,20 +10,32 @@ def periods(*messages: dict) -> tuple[list[tuple], list[str]]:
     return [tuple(row) for row in rows], issues
 
 
+def session(lap: int, text: str, minute: float) -> dict:
+    return message(lap, text, minute=minute, category="SessionStatus")
+
+
+def stoppage(lap: int, minute: float) -> list[dict]:
+    """A red flag as 2023-2025 races announce it."""
+    return [session(lap, "SESSION ABORTED", minute), message(lap, minute=minute, flag="RED")]
+
+
 def test_red_flag_race_with_three_stoppages() -> None:
-    """Shaped like 2023 Australia: lap-1 SC, SC upgraded to a red, a VSC, and two late reds."""
+    """Shaped like 2023 Australia: lap-1 SC, SC upgraded to a red, a VSC, and two late reds.
+    TRACK CLEAR comes during each stoppage; only the session restart ends it."""
     found, issues = periods(
         message(1, "SAFETY CAR DEPLOYED", minute=2),
         message(3, "SAFETY CAR IN THIS LAP", minute=5),
         message(7, "SAFETY CAR DEPLOYED", minute=12),
-        message(8, minute=15, flag="RED"),
-        message(9, minute=30, flag="GREEN"),
+        *stoppage(8, minute=15),
+        message(9, minute=29, flag="CLEAR"),
+        session(9, "SESSION STARTED", minute=30),
         message(18, "VIRTUAL SAFETY CAR DEPLOYED", minute=46),
         message(19, "VIRTUAL SAFETY CAR ENDING", minute=48),
-        message(55, minute=99, flag="RED"),
-        message(56, minute=109, flag="GREEN"),
-        message(57, minute=118, flag="RED"),
-        message(58, minute=141, flag="CLEAR"),
+        *stoppage(55, minute=99),
+        session(56, "SESSION STARTED", minute=109),
+        *stoppage(57, minute=118),
+        message(58, minute=131, flag="CLEAR"),
+        session(58, "SESSION STARTED", minute=141),
         message(58, minute=150, flag="CHEQUERED"),
     )
     assert found == [
@@ -39,12 +51,25 @@ def test_red_flag_race_with_three_stoppages() -> None:
 
 def test_red_flag_ends_when_the_restart_is_behind_the_safety_car() -> None:
     found, _ = periods(
-        message(10, minute=20, flag="RED"),
+        *stoppage(10, minute=20),
         message(11, "SAFETY CAR DEPLOYED", minute=50),
         message(13, "SAFETY CAR IN THIS LAP", minute=55),
         message(50, minute=100, flag="CHEQUERED"),
     )
     assert found == [("RED", 10, 11, "restart"), ("SC", 11, 13, "end_message")]
+
+
+def test_2026_red_flag_is_announced_in_text_only() -> None:
+    found, issues = periods(
+        message(3, "SAFETY CAR DEPLOYED", minute=5),
+        session(3, "SESSION ABORTED", minute=6),
+        message(3, "RED FLAG - RACE SUSPENDED", minute=6, category="Other"),
+        message(4, minute=8, flag="CLEAR"),
+        session(4, "SESSION STARTED", minute=38),
+        message(53, minute=100, flag="CHEQUERED"),
+    )
+    assert found == [("SC", 3, 3, "red_flag"), ("RED", 3, 4, "restart")]
+    assert issues == []
 
 
 def test_vsc_upgraded_to_safety_car() -> None:
@@ -112,3 +137,35 @@ def test_empty_race_control_gives_typed_empty_table() -> None:
     assert table.empty
     assert str(table["start_utc"].dtype) == "datetime64[ns, UTC]"
     assert issues == []
+
+
+def test_session_without_race_control_has_no_periods() -> None:
+    table, issues = parse_neutralisations(pd.DataFrame())
+    assert table.empty
+    assert issues == []
+    assert parse_yellows(pd.DataFrame()).empty
+
+
+def test_sector_yellows_run_until_cleared_or_the_flag() -> None:
+    def sector(minute: float, flag: str, number: int) -> dict:
+        return {**message(1, minute=minute, flag=flag), "scope": "Sector", "sector": number}
+
+    yellows = parse_yellows(
+        pd.DataFrame(
+            [
+                sector(10, "YELLOW", 4),
+                sector(10.5, "DOUBLE YELLOW", 4),  # an upgrade, not a new period
+                sector(11, "CLEAR", 4),
+                sector(20, "YELLOW", 7),
+                sector(25, "CLEAR", 9),  # a clear for a sector that was not yellow
+                message(30, minute=30, flag="CHEQUERED"),
+                sector(31, "YELLOW", 2),  # after the flag
+            ]
+        )
+    )
+
+    def minutes(column: str) -> list[float]:
+        return [(t - RACE_START).total_seconds() / 60 for t in yellows[column]]
+
+    assert yellows["sector"].tolist() == [4, 7]
+    assert (minutes("start_utc"), minutes("end_utc")) == ([10, 20], [11, 30])

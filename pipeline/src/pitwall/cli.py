@@ -12,7 +12,8 @@ from pitwall.export.bundle import export_bundle
 from pitwall.export.contract import write_schemas
 from pitwall.ingest.openf1 import OpenF1, fetch_race, finished_rounds
 from pitwall.ingest.storage import season_dir, write_race
-from pitwall.ingest.validate import RaceReport, validate_race, write_summary
+from pitwall.ingest.validate import RaceReport, check_prepared, validate_race, write_summary
+from pitwall.prepare import prepare_race
 
 
 def _git_sha() -> str:
@@ -45,6 +46,9 @@ def ingest(config: PipelineConfig, season: int, round_: int | None) -> bool:
         allocation = allocations.get((season, r))
         tables, issues = fetch_race(season, r, client, team_ids, allocation)
         report = validate_race(tables, allocation, config.validation, issues)
+        if not report.errors:
+            tables = prepare_race(tables, config.classification)
+            report = check_prepared(tables, report, config.validation, config.classification)
         reports.append(report)
         if report.errors:
             logger.error("{} R{} {}: not written", season, r, report.name)
@@ -53,13 +57,15 @@ def ingest(config: PipelineConfig, season: int, round_: int | None) -> bool:
             continue
         write_race(config.data_dir, tables)
         logger.info(
-            "{} R{} {}: {} laps, {} pits, {} neutralisations, {} warnings",
+            "{} R{} {}: {} laps ({} clean), {} pits, {} neutralisations, order {}, {} warnings",
             season,
             r,
             report.name,
             report.lap_rows,
+            report.lap_classes.get("clean", 0),
             report.pit_stops,
             report.neutralisations,
+            report.position_agreement,
             len(report.warnings),
         )
 

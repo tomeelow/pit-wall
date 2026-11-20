@@ -15,6 +15,14 @@ class _Config(BaseModel):
 class ValidationConfig(_Config):
     lap_time_min_factor: float = Field(gt=0)
     lap_time_max_factor: float = Field(gt=1)
+    min_position_agreement: float = Field(ge=0, le=1)
+    position_lag_s: float = Field(ge=0)
+
+
+class ClassificationConfig(_Config):
+    traffic_gap_s: float = Field(gt=0)
+    outlier_factor: float = Field(gt=1)
+    max_yellow_s: float = Field(gt=0)
 
 
 class PipelineConfig(_Config):
@@ -24,6 +32,7 @@ class PipelineConfig(_Config):
     calendar_cache_hours: float = Field(gt=0)
     min_hours_after_race: float = Field(ge=0)
     validation: ValidationConfig
+    classification: ClassificationConfig
 
 
 class RaceAllocation(_Config):

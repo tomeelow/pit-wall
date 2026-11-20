@@ -11,7 +11,7 @@ from requests_cache import CachedSession
 from urllib3.util.retry import Retry
 
 from pitwall.config import RaceAllocation
-from pitwall.ingest.neutralisations import parse_neutralisations
+from pitwall.ingest.neutralisations import parse_neutralisations, parse_yellows
 from pitwall.ingest.storage import EventInfo, RaceTables
 
 COMPOUNDS = ("SOFT", "MEDIUM", "HARD", "INTERMEDIATE", "WET")
@@ -93,7 +93,8 @@ def fetch_race(
     team_ids: dict[str, str],
     allocation: RaceAllocation | None,
 ) -> tuple[RaceTables, list[str]]:
-    """The race's canonical tables, plus issues found while parsing race control."""
+    """The race's source tables, plus issues found while parsing race control. Laps are not yet
+    classified and race_state is empty: `pitwall.prepare.prepare_race` derives both."""
     session = find_race_session(client, season, round_)
     key = session["session_key"]
     meeting = client.get("meetings", meeting_key=session["meeting_key"])[0]
@@ -113,9 +114,8 @@ def fetch_race(
     results = canonical_results(
         pd.DataFrame(client.get("session_result", session_key=key)), drivers, team_ids
     )
-    neutralisations, issues = parse_neutralisations(
-        pd.DataFrame(client.get("race_control", session_key=key))
-    )
+    race_control = pd.DataFrame(client.get("race_control", session_key=key))
+    neutralisations, issues = parse_neutralisations(race_control)
     if laps.empty or results.empty:
         raise RuntimeError(f"OpenF1 returned no laps or results for {season} round {round_}")
 
@@ -133,6 +133,11 @@ def fetch_race(
         results=results,
         pits=canonical_pits(pits, drivers),
         neutralisations=neutralisations,
+        yellows=parse_yellows(race_control),
+        positions=canonical_positions(
+            pd.DataFrame(client.get("position", session_key=key)), drivers
+        ),
+        race_state=pd.DataFrame(),
     )
     return tables, [f"race control: {issue}" for issue in issues]
 
@@ -171,7 +176,7 @@ def canonical_laps(
 ) -> pd.DataFrame:
     """OpenF1 laps + stints + pits → canonical lap table, one row per driver per lap.
 
-    Lap classification (in/out laps, neutralisations, traffic) is Phase 2, not done here.
+    Lap classification is added later by `classify_laps`, from these columns.
     """
     # A pit record's lap is the in-lap; the next stint starts on the following lap.
     pit_laps = set(zip(pits.get("driver_number", []), pits.get("lap_number", []), strict=True))
@@ -203,6 +208,7 @@ def canonical_laps(
             "team": joined["team_name"].astype(str),
             "team_id": joined["team_name"].map(team_ids).astype("string"),
             "lap": joined["lap_number"].astype("int64"),
+            "lap_start_utc": _utc(joined["date_start"]),
             "lap_time_s": joined["lap_duration"].astype("float64"),
             "compound": compound.astype(str),
             "compound_c": compound_c.astype("Int64"),
@@ -239,6 +245,30 @@ def canonical_results(
             "laps_completed": joined["number_of_laps"].astype("Int64"),
         }
     ).reset_index(drop=True)
+
+
+def _utc(timestamps: pd.Series) -> pd.Series:
+    return pd.to_datetime(timestamps, utc=True, format="ISO8601").astype("datetime64[ns, UTC]")
+
+
+def canonical_positions(positions: pd.DataFrame, drivers: pd.DataFrame) -> pd.DataFrame:
+    """OpenF1's running-order feed: one row per position change, as timed by F1."""
+    columns = {"driver": "string", "utc": "datetime64[ns, UTC]", "position": "int64"}
+    if positions.empty:
+        return pd.DataFrame({name: pd.Series(dtype=dtype) for name, dtype in columns.items()})
+    joined = _with_driver(positions, drivers)
+    return (
+        pd.DataFrame(
+            {
+                "driver": joined["name_acronym"],
+                "utc": _utc(joined["date"]),
+                "position": joined["position"],
+            }
+        )
+        .astype(columns)
+        .sort_values(["utc", "position"])
+        .reset_index(drop=True)
+    )
 
 
 def canonical_pits(pits: pd.DataFrame, drivers: pd.DataFrame) -> pd.DataFrame:
