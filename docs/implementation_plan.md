@@ -24,7 +24,7 @@ Update this table as phases land. It is the first thing to read when picking up 
 | 1 — Ingestion | ☑ done | 90 races (2023 R1 – 2026 R20) ingested, 0 rejected; allocations sourced from Pirelli releases. Known source gaps listed under Phase 1 → Findings |
 | 2 — Lap classification & race state | ☑ done | 90 races rebuilt, 50.5 % of 100,749 laps clean; race-state order matches OpenF1's position feed on ≥ 98 % of driver-laps in every race. Simplifications and data quirks under Phase 2 → Findings |
 | 3 — Tyre degradation model | ☑ done | Both era fits pass the gate; draws per race in `.data`. LORO: model beats the flat-median baseline only modestly (MAE 0.725 vs 0.758 s); details and the weak-OLS caveat under Phase 3 → Findings |
-| 4 — Pit loss, SC/VSC, reliability | ☑ done | Pit loss per track (green 19–28 s; SC 0.82×, VSC 0.84×), SC/VSC/red/DNF rates per race with that race masked out; per-track rates barely beat era-wide. **2026 VSC rate wrong until 2026 races are rebuilt from cache.** Phase 4 → Findings |
+| 4 — Pit loss, SC/VSC, reliability | ☑ done | Pit loss per track (green 19–28 s; SC/VSC factors per era: 0.68/0.84× in 2023–25, ~0.95× in 2026), SC/VSC/red/DNF rates per race with that race masked out; per-track rates barely beat era-wide. 2026 rebuilt with VSCs. Phase 4 → Findings |
 | 5 — Traffic & overtaking | ☐ not started | |
 | 6 — Simulation engine | ☐ not started | |
 | 7 — Simulator validation | ☐ not started | |
@@ -316,7 +316,8 @@ Implemented in `pitwall.laps` (classes), `pitwall.race_state` (snapshots) and `p
   the flag).
 - **2026 abbreviates VSC** ("VSC DEPLOYED" / "VSC ENDING"). The parser missed all 25 VSC periods
   in 2026 until this was fixed; most of those laps were already excluded as `yellow` (2026 clean
-  laps: 11,829 → 11,819 after the fix), so the Phase 3 fit is unaffected.
+  laps: 11,829 → 11,819 after the fix), so the Phase 3 fit is unaffected. The 2026 races were rebuilt
+  from the response cache with the fix, and 2026 was refitted.
 - **In-laps are inferred** from the next lap being an out-lap, which covers 2023 R1–R6 (no pit
   records).
 - **`wet` comes from the compound only**; there is no rain flag in the classification.
@@ -385,7 +386,7 @@ gate:
 | Era | Clean laps | Races | Left out | max R̂ | ESS bulk / tail | Divergences | fuel effect (s/kg) |
 |---|---|---|---|---|---|---|---|
 | 2023–2025 | 39,041 | 69 | C6 (one race) | 1.007 | 1047 / 1522 | 0 | 0.0291 (0.0289–0.0293) |
-| 2026 | 11,829 | 20 | — | 1.005 | 1134 / 916 | 0 | 0.0438 |
+| 2026 | 11,819 | 20 | — | 1.005 | 1305 / 937 | 0 | 0.0438 |
 
 - **Zero-sum deviations.** Deviations are zero-sum within their parent:
   - track slopes within each C-number;
@@ -488,7 +489,7 @@ Outputs per race in `.data/races/*/`:
 Not in the contract yet; that is Phase 6.
 
 **Pit loss**
-- 2,250 tyre stops measured: 2,011 green, 190 under SC, 49 under VSC.
+- 2,250 tyre stops measured: 1,903 green, 190 under SC, 157 under VSC.
 - Excluded:
   - stops without a tyre change;
   - stops whose lane time is over 1.5 × the race median (penalties and queues);
@@ -506,14 +507,25 @@ Not in the contract yet; that is Phase 6.
     mid-2024.
   - Other tracks take the loss minus the era's median stationary time.
   - An unseen track takes the median across tracks (`pit_loss_from: "era"`).
-- **Under SC and VSC:** the median loss is 0.82× and 0.84× the same track's green loss. This is a
-  smaller discount than the usual "half price" folklore. The measured loss is relative to cars
-  that stayed out on the same laps, and part of an SC lap is often run at green speed before the
-  field bunches. 49 VSC stops is a small sample.
+- **Under SC and VSC, per era** (median loss over the same track's green loss):
+
+  | Era | SC | VSC | SC / VSC stops |
+  |---|---|---|---|
+  | 2023–25 | 0.68× | 0.84× | 129 / 49 |
+  | 2026 | 0.94× | 0.96× | 61 / 108 |
+
+  - Both are smaller discounts than the "half price" folklore. The measured loss is relative to
+    cars that stayed out on the same laps, and part of an SC lap often runs at green speed before
+    the field bunches.
+  - **In 2026 a neutralisation saves almost nothing.** These factors were pooled across eras until
+    the 2026 VSCs were recovered (0.82 / 0.84 pooled). They are now per era, as the era rule
+    requires.
+  - The 2026 cause is not established. Candidates are the new cars' slower neutralised pace
+    relative to their pit lane, and the procedures.
 - **Stationary time:** 1,103 timed stops. Median 2.8 s, 90th percentile 5.5 s, 99th 14.4 s. The
   simulator samples from all of them, so slow stops come with them.
-- **Lap time under SC / VSC:** median 1.46× / 1.24× the race's median clean lap, for cars not
-  pitting.
+- **Lap time under SC / VSC** (cars not pitting), per era, over the race's median clean lap:
+  2023–25 1.48× / 1.24×, 2026 1.41× / 1.19×.
 - Crew speed is not modelled per team: one distribution per era.
 - **Per-compound warm-up is not modelled yet; it moves to Phase 8.** The pit loss already
   contains the average out-lap warm-up. Phase 3's residuals show the per-compound part is
@@ -548,10 +560,10 @@ Not in the contract yet; that is Phase 6.
   | Red flag | 0.032 | 0.0016 |
   | DNF | 0.018 per car | 0.0016 per car |
 
-  2026 runs at 0.0029 DNFs per car-lap: the new power units retire cars more often.
-- **2026 VSC rate is wrong until the stored 2026 races are rebuilt.** Until the parser fix (Phase 2
-  findings), 2026 neutralisation tables had no VSCs, and the fit reads 0.0005/lap. The rebuild runs
-  from the response cache and needs no API calls.
+  2026 differs in two ways:
+  - 0.0029 DNFs per car-lap: the new power units retire cars more often.
+  - 0.022 VSCs per lap, about 3× the 2023–25 rate (25 VSCs in 20 races). Race control reaches for
+    the VSC much more often under the 2026 rules.
 
 **Validation** (`validate-events`: leave one season out, 2023–2025; 70 races). The metric is the
 probability of at least one event per race, ex ante. The baseline is the share of the same era's
@@ -560,7 +572,7 @@ training races with at least one.
 | Kind | Observed rate | Brier model / baseline | Log loss model / baseline |
 |---|---|---|---|
 | SC | 0.47 | 0.250 / 0.263 | 0.693 / 0.720 |
-| VSC | 0.39 | 0.238 / 0.240 | 0.668 / 0.673 |
+| VSC | 0.39 | 0.237 / 0.240 | 0.667 / 0.673 |
 | Red flag | 0.11 | 0.108 / 0.105 | 0.380 / 0.375 |
 
 - **The per-track rates barely beat the era-wide rate.** For red flags they are marginally worse.

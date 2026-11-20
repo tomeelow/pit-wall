@@ -1,8 +1,9 @@
 """Per-race pit-loss and random-event parameters for the simulator, and their validation.
 
 What a race's parameters may learn from (the information-set rule):
-- Pit-lane transit and the SC/VSC factors are physical properties, fitted on every race. This is
-  the same documented softening as pace.
+- Pit-lane transit and the SC/VSC factors are physical properties, fitted on every race of the
+  era. This is the same documented softening as pace. The factors are per era: 2026 changed how
+  much a stop under a safety car saves (0.68x green in 2023-2025, 0.94x in 2026).
 - Random events are not. Stationary times, neutralisation durations and the event rates for a
   race come from every *other* race.
 """
@@ -37,7 +38,7 @@ class History:
 
     races: dict[str, RaceTables]
     stops: pd.DataFrame  # pit_loss.stop_losses + race, era
-    paces: pd.DataFrame  # pit_loss.neutralised_pace + race
+    paces: pd.DataFrame  # pit_loss.neutralised_pace + race, era
     periods: pd.DataFrame  # neutralisations + race
     rows: pd.DataFrame  # hazard rows
 
@@ -50,7 +51,7 @@ class History:
         for race, t in races.items():
             era = regulations.era_of(t.event.season)
             stops.append(pit_loss.stop_losses(t, config.pit_loss).assign(race=race, era=era.name))
-            paces.append(pit_loss.neutralised_pace(t).assign(race=race))
+            paces.append(pit_loss.neutralised_pace(t).assign(race=race, era=era.name))
             periods.append(t.neutralisations.assign(race=race))
             rows += [
                 hazards.neutralisation_rows(t, race, era),
@@ -82,12 +83,16 @@ class History:
             pit_transit_s=round(float(transit), 3),
             pit_loss_from=source,
             pit_condition_factor={
-                k: round(v, 3) for k, v in pit_loss.condition_factors(self.stops).items()
+                k: round(v, 3)
+                for k, v in pit_loss.condition_factors(self.stops[self.stops["era"] == era]).items()
             },
             stationary_s=[round(float(s), 2) for s in stationary],
             neutralised_lap_factor={
                 str(k): round(float(v), 3)
-                for k, v in self.paces.groupby("kind")["factor"].median().items()
+                for k, v in self.paces[self.paces["era"] == era]
+                .groupby("kind")["factor"]
+                .median()
+                .items()
             },
             duration_laps={
                 kind: sorted(durations[periods["kind"] == kind].astype(int).tolist())
@@ -182,7 +187,7 @@ class EventsCard(BaseModel):
     # Events per lap (running) or per start (lap1), median and 90 % interval, per era.
     rates: dict[str, dict[str, list[float]]]
     stops: dict[str, int]
-    pit_condition_factor: dict[str, float]
+    pit_condition_factor: dict[str, dict[str, float]]  # per era
     stationary_quantiles_s: dict[str, float]
 
 
@@ -203,7 +208,8 @@ def model_card(history: History, fit: hazards.RateFit, git_sha: str) -> EventsCa
         rates=rates,
         stops={str(k): int(v) for k, v in history.stops["condition"].value_counts().items()},
         pit_condition_factor={
-            k: round(v, 3) for k, v in pit_loss.condition_factors(history.stops).items()
+            str(era): {k: round(v, 3) for k, v in pit_loss.condition_factors(stops).items()}
+            for era, stops in history.stops.groupby("era")
         },
         stationary_quantiles_s={
             f"q{int(q * 100):02d}": round(float(np.quantile(stationary, q)), 2)
