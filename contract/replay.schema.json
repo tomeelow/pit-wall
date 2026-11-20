@@ -1,0 +1,167 @@
+{
+  "$defs": {
+    "FastestLap": {
+      "additionalProperties": false,
+      "properties": {
+        "driver": {
+          "type": "string"
+        },
+        "lap": {
+          "type": "integer"
+        },
+        "lap_time_s": {
+          "type": "number"
+        },
+        "telemetry_path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "driver",
+        "lap",
+        "lap_time_s",
+        "telemetry_path"
+      ],
+      "title": "FastestLap",
+      "type": "object"
+    },
+    "Neutralisation": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "SC",
+            "VSC",
+            "RED"
+          ],
+          "type": "string"
+        },
+        "start_lap": {
+          "type": "integer"
+        },
+        "end_lap": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "start_lap",
+        "end_lap"
+      ],
+      "title": "Neutralisation",
+      "type": "object"
+    },
+    "ReplayCar": {
+      "additionalProperties": false,
+      "properties": {
+        "driver": {
+          "type": "string"
+        },
+        "lap_end_s": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "driver",
+        "lap_end_s"
+      ],
+      "title": "ReplayCar",
+      "type": "object"
+    },
+    "TrackOutline": {
+      "additionalProperties": false,
+      "description": "The location trace of the race's fastest lap: x and y in OpenF1 units (about 0.1 m), t_ms\nfrom the line. Replay cars move along it with that lap's timing, scaled to their own lap.",
+      "properties": {
+        "driver": {
+          "type": "string"
+        },
+        "lap": {
+          "type": "integer"
+        },
+        "lap_time_s": {
+          "type": "number"
+        },
+        "x": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "y": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "t_ms": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "driver",
+        "lap",
+        "lap_time_s",
+        "x",
+        "y",
+        "t_ms"
+      ],
+      "title": "TrackOutline",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "0.5.0",
+      "type": "string"
+    },
+    "season": {
+      "type": "integer"
+    },
+    "round": {
+      "type": "integer"
+    },
+    "dataset_version": {
+      "type": "string"
+    },
+    "track": {
+      "$ref": "#/$defs/TrackOutline"
+    },
+    "cars": {
+      "items": {
+        "$ref": "#/$defs/ReplayCar"
+      },
+      "type": "array"
+    },
+    "neutralisations": {
+      "items": {
+        "$ref": "#/$defs/Neutralisation"
+      },
+      "type": "array"
+    },
+    "fastest_laps": {
+      "items": {
+        "$ref": "#/$defs/FastestLap"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "season",
+    "round",
+    "dataset_version",
+    "track",
+    "cars",
+    "neutralisations",
+    "fastest_laps"
+  ],
+  "title": "Replay",
+  "type": "object"
+}

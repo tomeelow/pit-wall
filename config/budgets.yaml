@@ -8,3 +8,11 @@ sim_benchmark:
   laps: 60
   cars: 20
   max_seconds: 6
+
+# Per-race bundle files, gzipped bytes. `pitwall export` fails when one is over, so the publish
+# workflow stops rather than ship it. Monza 2024 for scale: race and sim 53 KB, replay 9 KB,
+# a telemetry lap 9 KB.
+bundle:
+  race_core_gz_bytes: 1000000     # the race file and its simulator inputs together
+  replay_gz_bytes: 5000000
+  telemetry_lap_gz_bytes: 100000  # one driver's lap, loaded when it is picked

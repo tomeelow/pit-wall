@@ -5,6 +5,9 @@ bundle_dir: web/public/data   # exported static bundle served by the web app (gi
 openf1_url: https://api.openf1.org/v1
 # The season calendar changes as races finish; every other response is final and cached forever.
 calendar_cache_hours: 6
+# Pause after every response not served from the cache. OpenF1's free tier allows 30 requests a
+# minute; a backfill of fastest-lap traces makes about 21 requests per race.
+openf1_min_interval_s: 2.0
 # A race counts as finished (and is ingested by a season run) this long after its scheduled end.
 min_hours_after_race: 12
 

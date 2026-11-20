@@ -12,7 +12,7 @@ from pitwall.export.contract import SCHEMA_VERSION, Calibration, GateResult
 from pitwall.export.sim import build_sim
 from pitwall.ingest.storage import RaceTables, write_race
 from pitwall.validate import simulator
-from tests.conftest import CONFIG
+from tests.conftest import BUDGETS, CONFIG
 from tests.test_sim_export import write_models
 
 GATE = SimulatorGate(
@@ -164,11 +164,11 @@ def test_bundle_publishes_only_a_calibration_that_matches_the_contract(
     source.parent.mkdir(parents=True)
 
     source.write_text('{"schema_version": "0.0.1"}')
-    manifest = export_bundle(data_dir, bundle_dir, "abc", CONFIG.sim, load_regulations())
+    manifest = export_bundle(data_dir, bundle_dir, "abc", CONFIG.sim, load_regulations(), BUDGETS)
     assert manifest.calibration_path is None
 
     source.write_text(accepted(-1.9, 0.5).model_dump_json())
-    manifest = export_bundle(data_dir, bundle_dir, "abc", CONFIG.sim, load_regulations())
+    manifest = export_bundle(data_dir, bundle_dir, "abc", CONFIG.sim, load_regulations(), BUDGETS)
     assert manifest.calibration_path == "calibration.json"
     published = Calibration.model_validate_json((bundle_dir / "calibration.json").read_text())
     assert published.segments[0].log_score == -1.9

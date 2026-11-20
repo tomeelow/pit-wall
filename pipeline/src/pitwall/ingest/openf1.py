@@ -1,5 +1,6 @@
 """Race ingestion from OpenF1 into the canonical race tables."""
 
+import time
 from datetime import datetime, timedelta
 from itertools import pairwise
 from pathlib import Path
@@ -28,9 +29,12 @@ class OpenF1:
     """Cached, retrying client. Finished sessions never change, so their responses are cached
     forever and downloaded once; only the season calendar expires, so new races appear."""
 
-    def __init__(self, base_url: str, cache_path: Path, calendar_cache_hours: float) -> None:
+    def __init__(
+        self, base_url: str, cache_path: Path, calendar_cache_hours: float, min_interval_s: float
+    ) -> None:
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         self._base_url = base_url.rstrip("/")
+        self._min_interval_s = min_interval_s
         calendar = f"{self._base_url.split('://', 1)[-1]}/sessions"
         self._session = CachedSession(
             str(cache_path),
@@ -48,6 +52,8 @@ class OpenF1:
 
     def get(self, endpoint: str, **params: int | str) -> Records:
         response = self._session.get(f"{self._base_url}/{endpoint}", params=params, timeout=60)
+        if not response.from_cache:
+            time.sleep(self._min_interval_s)
         # OpenF1 answers an empty result set with 404 rather than [].
         if response.status_code == 404:
             return []

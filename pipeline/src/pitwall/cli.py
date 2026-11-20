@@ -13,6 +13,7 @@ from pitwall.config import (
     REPO_ROOT,
     PipelineConfig,
     load_allocations,
+    load_budgets,
     load_config,
     load_regulations,
     load_team_ids,
@@ -29,6 +30,7 @@ from pitwall.ingest.storage import (
     season_dir,
     write_race,
 )
+from pitwall.ingest.traces import fetch_traces, read_traces, write_traces
 from pitwall.ingest.validate import RaceReport, check_prepared, validate_race, write_summary
 from pitwall.models import backtest, degradation, events, traffic, warmup
 from pitwall.models.hazards import RateModel
@@ -49,11 +51,18 @@ def _git_sha() -> str:
     return result.stdout.strip() or "unknown"
 
 
+def _openf1(config: PipelineConfig) -> OpenF1:
+    return OpenF1(
+        config.openf1_url,
+        config.data_dir / "openf1-cache.sqlite",
+        config.calendar_cache_hours,
+        config.openf1_min_interval_s,
+    )
+
+
 def ingest(config: PipelineConfig, season: int, round_: int | None) -> bool:
     """Ingest one race, or every finished race of the season. True if every race validated."""
-    client = OpenF1(
-        config.openf1_url, config.data_dir / "openf1-cache.sqlite", config.calendar_cache_hours
-    )
+    client = _openf1(config)
     team_ids, allocations = load_team_ids(), load_allocations()
     rounds = (
         [round_]
@@ -76,6 +85,7 @@ def ingest(config: PipelineConfig, season: int, round_: int | None) -> bool:
                 logger.error("  {}", error)
             continue
         write_race(config.data_dir, tables)
+        write_traces(config.data_dir, tables, *fetch_traces(client, tables))
         logger.info(
             "{} R{} {}: {} laps ({} clean), {} pits, {} neutralisations, order {}, {} warnings",
             season,
@@ -100,6 +110,24 @@ def ingest(config: PipelineConfig, season: int, round_: int | None) -> bool:
         summary,
     )
     return not failed
+
+
+def ingest_traces(config: PipelineConfig, season: int | None) -> None:
+    """Fetch fastest-lap traces for stored races that have none; `ingest` fetches them itself."""
+    client = _openf1(config)
+    for path in list_races(config.data_dir):
+        tables = read_race(path)
+        if (season is not None and tables.event.season != season) or read_traces(path):
+            continue
+        traces, track = fetch_traces(client, tables)
+        write_traces(config.data_dir, tables, traces, track)
+        logger.info(
+            "{} R{}: {} fastest laps, track outline of {} points",
+            tables.event.season,
+            tables.event.round,
+            traces.groupby("driver").ngroups,
+            len(track),
+        )
 
 
 def _model_dir(config: PipelineConfig, model: str = "degradation") -> Path:
@@ -507,6 +535,11 @@ def main() -> None:
     ingest_cmd.add_argument("--season", type=int, required=True)
     ingest_cmd.add_argument("--round", type=int, help="omit to ingest the whole season")
 
+    traces_cmd = commands.add_parser(
+        "ingest-traces", help="fetch fastest-lap car data and location for stored races"
+    )
+    traces_cmd.add_argument("--season", type=int, help="omit for every stored race")
+
     fit_cmd = commands.add_parser(
         "fit-degradation", help="fit the degradation model and export posterior draws per race"
     )
@@ -548,6 +581,8 @@ def main() -> None:
         case "ingest":
             if not ingest(config, args.season, args.round):
                 sys.exit(1)
+        case "ingest-traces":
+            ingest_traces(config, args.season)
         case "fit-degradation":
             eras = [args.era] if args.era else [e.name for e in load_regulations().eras]
             if not all([fit_degradation(config, era) for era in eras]):
@@ -571,7 +606,12 @@ def main() -> None:
                 sys.exit(1)
         case "export":
             export_bundle(
-                config.data_dir, config.bundle_dir, _git_sha(), config.sim, load_regulations()
+                config.data_dir,
+                config.bundle_dir,
+                _git_sha(),
+                config.sim,
+                load_regulations(),
+                load_budgets().bundle,
             )
         case "contract":
             for path in write_schemas(args.out):

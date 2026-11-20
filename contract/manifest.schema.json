@@ -25,6 +25,16 @@
             }
           ]
         },
+        "replay_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "dataset_version": {
           "type": "string"
         }
@@ -35,6 +45,7 @@
         "name",
         "path",
         "sim_path",
+        "replay_path",
         "dataset_version"
       ],
       "title": "RaceEntry",
@@ -90,7 +101,7 @@
   "additionalProperties": false,
   "properties": {
     "schema_version": {
-      "const": "0.4.0",
+      "const": "0.5.0",
       "type": "string"
     },
     "git_sha": {
