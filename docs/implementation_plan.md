@@ -29,7 +29,7 @@ Update this table as phases land. It is the first thing to read when picking up 
 | 6 — Simulation engine | ☑ done | Seeded TS engine with CRN, worker pool and contract 0.2.0 sim inputs for 76/90 races; 10 000 × 60 × 20 in 1.5 s on one thread (CI budget 6 s); zero-noise replay misses the result by 1.24 positions vs 2.33 for the lap-1 order. Open-loop stops under sampled SCs fatten ex-ante tails — Phase 7's first question. Phase 6 → Findings |
 | 7 — Simulator validation | ☑ done | 75 dry races × 4 start laps × 1,000 ex-ante runs: coverage 0.48 / 0.78 at 50 / 80 %, log score −1.93 vs −2.38 for the order at the start lap; beats both baselines in every segment. Overconfident from 75 % distance (0.44 / 0.71) and after real neutralisations; Miami 2025 refused (race-time gap). Phase 7 → Findings |
 | 8 — Strategy optimiser, counterfactuals, undercut | ☑ done | Counterfactual, optimiser (successive halving, recovers a known optimum), undercut and debrief in `web/src/sim`; tyre warm-up fitted (≤ 0.64 s, barely moves calibration). Undercut beats the base rate on 181 real pairs (Brier 0.185 vs 0.205). Full search 4 s on one thread. Debrief prefers later stops (open-loop rivals, linear wear). Phase 8 → Findings |
-| 9 — Strategy lab UI | ☐ not started | |
+| 9 — Strategy lab UI | ☑ done | Rim theme, dark first (light on request). Race, What if, Optimise, Undercut and Model card screens, all simulation on the worker pool, view kept in the URL; editor rule check mirrors the engine's DSQ test. Calibration is shown per segment: no per-track scores are exported yet. Phase 9 → Findings |
 | 10 — Analytics: replay, telemetry, debrief | ☐ not started | |
 | 11 — Post-weekend automation & publishing | ☐ not started | |
 | 12 — Docs & polish | ☐ not started | |
@@ -1209,6 +1209,24 @@ Simulation always runs in the worker pool; the main thread never blocks. Progres
 (update histograms as batches finish).
 
 **Deliverable:** deployed UI that answers the three headline questions for any 2023+ race.
+
+### Findings
+
+- **Look.** Rim (Hallmark theme), dark first, chosen against public views of team tools
+  (Catapult RaceWatch, ATLAS): near-black, dense tables, colour spent on data (tyres, gains),
+  not on chrome. One accent marks the primary action, the selection and the current tab.
+- **Coverage.** The race view works for all 90 races; the strategy tools need a sim bundle, which
+  75 races have (Phases 6 and 7 list which are left out and why); the others say so instead of
+  failing.
+- **One rule check.** `checkRules` (`web/src/sim/rules.ts`) is the engine's own legality test read
+  from the race state; a test holds it to the engine's DSQ verdicts. A rule-breaking plan still
+  runs and gets its real consequence, as the engine gives it.
+- **Ex ante and ex post stay apart.** What if and Undercut let the viewer choose events drawn at
+  random (the default: what was knowable) or as they happened; the result states which.
+  Optimise searches ex ante only.
+- **Not yet:** calibration for *this track* — the calibration file has segments (era, passing,
+  start, neutralised), not per-race scores, so the model card shows those and says so. Debrief
+  screens belong to Phase 10.
 
 ---
 

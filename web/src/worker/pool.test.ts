@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { actualStrategies, runSimulations, type Outcome, type Query } from "../sim/index.ts";
+import { actualStrategies, runSimulations, undercut, type Query } from "../sim/index.ts";
 import { syntheticRace } from "../sim/synthetic.ts";
 import { SimPool, type WorkerLike } from "./pool.ts";
-import { handle, split, type Job } from "./protocol.ts";
+import { handle, split, type Job, type Reply } from "./protocol.ts";
 
 /** A worker that runs the real job handler in-process, asynchronously like the real one. */
 function inProcessWorker(): WorkerLike {
@@ -11,13 +11,13 @@ function inProcessWorker(): WorkerLike {
     onerror: null,
     postMessage(job: Job) {
       queueMicrotask(() => {
-        let data: Outcome | { error: string };
+        let data: Reply;
         try {
           data = handle(structuredClone(job));
         } catch (error) {
           data = { error: (error as Error).message };
         }
-        worker.onmessage?.({ data } as MessageEvent<Outcome | { error: string }>);
+        worker.onmessage?.({ data } as MessageEvent<Reply>);
       });
     },
     terminate() {},
@@ -67,6 +67,23 @@ describe("SimPool", () => {
     pool.dispose();
     expect(later.first).toBe(40);
     expect(later.position).toEqual(runSimulations(race, query, 40, query.runs).position);
+  });
+
+  it("answers an undercut question as the engine does in process", async () => {
+    const pool = new SimPool(2, inProcessWorker);
+    const ask = {
+      attacker: 1,
+      defender: 0,
+      lap: 8,
+      attackerCompound: race.compounds[0]!,
+      defenderCompound: race.compounds[0]!,
+      runs: 20,
+      seed: 4,
+      mode: query.mode,
+    };
+    const pooled = await pool.undercut(race, ask);
+    pool.dispose();
+    expect(pooled).toEqual(undercut(race, ask));
   });
 
   it("rejects with the worker's error", async () => {

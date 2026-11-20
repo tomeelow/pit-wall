@@ -164,6 +164,11 @@ export async function counterfactual(
     },
     0,
   );
+  return compare(race, outcome, car);
+}
+
+/** Set 1 against set 0 for one car: also for a partial outcome, while more runs are coming. */
+export function compare(race: SimRace, outcome: Outcome, car: number): Comparison {
   return {
     actual: distribution(race, outcome, 0, car),
     alternative: distribution(race, outcome, 1, car),
