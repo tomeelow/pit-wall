@@ -14,7 +14,7 @@ export default defineConfig(
     languageOptions: { globals: globals.browser },
   },
   {
-    files: ["scripts/**/*.mjs"],
+    files: ["scripts/**/*.{mjs,ts}"],
     languageOptions: { globals: globals.node },
   },
   // ADR-001: the simulation engine is pure and seeded.

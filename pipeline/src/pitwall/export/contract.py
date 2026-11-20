@@ -12,8 +12,8 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 from pydantic.json_schema import GenerateJsonSchema
 
-SchemaVersion = Literal["0.1.0"]
-SCHEMA_VERSION: SchemaVersion = "0.1.0"
+SchemaVersion = Literal["0.2.0"]
+SCHEMA_VERSION: SchemaVersion = "0.2.0"
 
 Compound = Literal["SOFT", "MEDIUM", "HARD", "INTERMEDIATE", "WET", "UNKNOWN"]
 
@@ -53,6 +53,8 @@ class RaceEntry(_Contract):
     round: int
     name: str
     path: str
+    # None when the race cannot be simulated; the pipeline log says why.
+    sim_path: str | None
     dataset_version: str
 
 
@@ -63,7 +65,137 @@ class Manifest(_Contract):
     races: list[RaceEntry]
 
 
-TOP_LEVEL: dict[str, type[_Contract]] = {"manifest": Manifest, "race": Race}
+# Simulator inputs (Phase 6). Every list named per draw has SimRace.draws entries, and draw i of
+# every model goes together. Lists named per compound follow SimRace.compounds.
+
+NeutralisationKind = Literal["SC", "VSC", "RED"]
+
+
+class Rules(_Contract):
+    """What every finishing strategy must satisfy; breaking a rule is a disqualification. A stop
+    under a red flag costs nothing when red_flag_free_tyre_change is set."""
+
+    min_dry_compounds: int
+    min_stops: int
+    max_stint_laps: int | None
+    red_flag_free_tyre_change: bool
+
+
+class Mechanics(_Contract):
+    follow_gap_s: float  # closest a car stuck behind another crosses the line
+    restart_gap_s: float  # gap between consecutive cars when a safety car or red flag ends
+
+
+class Degradation(_Contract):
+    """Free-air lap time = race_median_s + pace_s[car] + offset_s[compound]
+    + slope_s_per_lap[car][compound] * tyre_age + fuel_s_per_kg * fuel_kg(lap)
+    + StudentT(nu, 0, noise_sd_s), where fuel_kg(lap) = race_fuel_kg * (1 - (lap - 0.5) / laps)
+    and tyre_age counts the lap being driven."""
+
+    race_median_s: float
+    race_fuel_kg: float
+    fuel_s_per_kg: list[float]  # per draw
+    nu: list[float]  # per draw
+    noise_sd_s: list[float]  # per draw
+    offset_s: list[list[float]]  # per compound, per draw
+
+
+class PitLoss(_Contract):
+    """Time a stop costs over the in-lap and out-lap: (transit_s + a stationary time) x the
+    factor of the condition it is made under (1 when green)."""
+
+    transit_s: float
+    stationary_s: list[float]  # empirical sample from other races, slow stops included
+    sc_factor: float
+    vsc_factor: float
+
+
+class NeutralisationParams(_Contract):
+    kind: NeutralisationKind
+    rate_per_lap: list[float]  # per draw: starts per green lap
+    duration_laps: list[int]  # empirical sample from other races
+    lap_factor: float  # neutralised lap time over a free-air lap
+
+
+class DirtyAirBin(_Contract):
+    gap_upto_s: float
+    loss_s: float
+
+
+class Traffic(_Contract):
+    """P(pass the car ahead on a green lap) = logistic(intercept + beta_gap_s * gap
+    + beta_pace_delta_s * pace delta + beta_within_drs * [gap <= drs_gap_s]) for gap <= max_gap_s.
+    The intercept includes the track's effect."""
+
+    max_gap_s: float
+    drs_gap_s: float
+    dirty_air: list[DirtyAirBin]
+    intercept: list[float]  # per draw
+    beta_gap_s: list[float]  # per draw
+    beta_pace_delta_s: list[float]  # per draw
+    beta_within_drs: list[float]  # per draw
+
+
+class PlannedStop(_Contract):
+    lap: int  # in-lap: the car pits at the end of it
+    compound_c: int
+    tyre_age: int  # laps already run on the set fitted
+
+
+class Car(_Contract):
+    driver: str
+    team_id: str
+    # "field": the driver has no clean laps, so pace is the field median of each draw.
+    pace_from: Literal["driver", "field"]
+    pace_s: list[float]  # per draw
+    slope_s_per_lap: list[list[float]]  # per compound, per draw
+    dnf_rate_per_lap: list[float]  # per draw
+    stops: list[PlannedStop]  # the strategy actually run
+    finish_position: int | None  # official classification; None for DNF and DSQ
+    retired_after_lap: int | None  # last lap completed by a car that did not finish
+
+
+class Snapshot(_Contract):
+    """Race state after `lap` was completed. Lists are per car, in SimRace.cars order; None for a
+    car that has retired. A stop made at the end of `lap` has already happened."""
+
+    lap: int
+    race_time_s: list[float | None]
+    compound_c: list[int | None]
+    tyre_age: list[int | None]
+    stint_laps: list[int | None]  # laps raced on the current set in this race
+    stops: list[int]
+    dry_compounds: list[list[int]]  # C-numbers used so far
+
+
+class Neutralisation(_Contract):
+    kind: NeutralisationKind
+    start_lap: int
+    end_lap: int
+
+
+class SimRace(_Contract):
+    schema_version: SchemaVersion
+    season: int
+    round: int
+    name: str
+    era: str
+    total_laps: int
+    dataset_version: str
+    draws: int
+    rules: Rules
+    mechanics: Mechanics
+    compounds: list[int]  # C-numbers the degradation model covers for this race
+    degradation: Degradation
+    pit_loss: PitLoss
+    neutralisations: list[NeutralisationParams]
+    traffic: Traffic
+    cars: list[Car]
+    snapshots: list[Snapshot]  # after laps 1 .. total_laps - 1
+    realised: list[Neutralisation]  # what happened: for replays and ex-post views only
+
+
+TOP_LEVEL: dict[str, type[_Contract]] = {"manifest": Manifest, "race": Race, "sim": SimRace}
 
 
 class _UntitledFields(GenerateJsonSchema):

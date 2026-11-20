@@ -6,6 +6,7 @@ from pathlib import Path
 import pandas as pd
 from loguru import logger
 
+from pitwall.config import Regulations, SimConfig
 from pitwall.export.contract import (
     SCHEMA_VERSION,
     DriverRace,
@@ -14,6 +15,7 @@ from pitwall.export.contract import (
     RaceEntry,
     Stint,
 )
+from pitwall.export.sim import NotSimulable, build_sim
 from pitwall.ingest.storage import RaceTables, list_races, read_race
 
 
@@ -62,24 +64,42 @@ def build_race(tables: RaceTables) -> Race:
     )
 
 
-def export_bundle(data_dir: Path, bundle_dir: Path, git_sha: str) -> Manifest:
+def _write(bundle_dir: Path, relative: str, json: str) -> None:
+    out = bundle_dir / relative
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json)
+    logger.info("exported {} ({} bytes)", relative, out.stat().st_size)
+
+
+def export_bundle(
+    data_dir: Path, bundle_dir: Path, git_sha: str, sim: SimConfig, regulations: Regulations
+) -> Manifest:
     entries = []
     for path in list_races(data_dir):
-        race = build_race(read_race(path))
-        relative = f"races/{race.season}/{race.round:02d}.json"
-        out = bundle_dir / relative
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(race.model_dump_json())
+        tables = read_race(path)
+        race = build_race(tables)
+        stem = f"races/{race.season}/{race.round:02d}"
+        _write(bundle_dir, f"{stem}.json", race.model_dump_json())
+        sim_path: str | None = f"{stem}.sim.json"
+        try:
+            _write(
+                bundle_dir,
+                f"{stem}.sim.json",
+                build_sim(path, tables, regulations, sim).model_dump_json(),
+            )
+        except NotSimulable as reason:
+            logger.warning("{}: not simulable: {}", stem, reason)
+            sim_path = None
         entries.append(
             RaceEntry(
                 season=race.season,
                 round=race.round,
                 name=race.name,
-                path=relative,
+                path=f"{stem}.json",
+                sim_path=sim_path,
                 dataset_version=race.dataset_version,
             )
         )
-        logger.info("exported {} ({} bytes)", relative, out.stat().st_size)
 
     manifest = Manifest(
         schema_version=SCHEMA_VERSION,

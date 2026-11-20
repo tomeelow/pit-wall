@@ -5,12 +5,24 @@ eras:
     # Maximum fuel at the start of a race, kg (110 kg since 2019).
     # Source: https://www.autosport.com/f1/news/151295/how-much-fuel-does-a-formula-1-car-use
     race_fuel_kg: 110
+    # Sporting Regulations Art. 30.5: unless intermediate or wet tyres are used, every driver uses at
+    # least two dry specifications in the race.
+    # Source: https://fia.com/sites/default/files/fia_2025_formula_1_sporting_regulations_-_issue_1_-_2024-07-31.pdf
+    min_dry_compounds: 2
+    # Tyres may be changed while a red flag has stopped the race: a stop then costs no time.
+    # Source: https://www.skysports.com/f1/news/12433/13248475/f1-red-flag-tyre-change-rules-explained-lando-norris-regulation-complaints-after-sao-paulo-gp-disappointment
+    red_flag_free_tyre_change: true
   "2026":
     seasons: [2026]
     # UNVERIFIED. Secondary source only: https://f1chronicle.com/f1-fuel-flow-2026-explained
     # (2026-03-04, no article cited). The FIA 2026 Technical Regulations (Section C, Issue 14,
     # 2025-10-16) limit fuel energy flow (C5.2.3: 3000 MJ/h) but state no race fuel mass.
     race_fuel_kg: 70
+    # Not yet checked against the 2026 Sporting Regulations text. Every finisher of a dry 2026 race
+    # in the data (to R20) used at least two dry compounds.
+    min_dry_compounds: 2
+    # Not yet checked against the 2026 text; 16 cars changed tyres under the 2026 Monaco red flag.
+    red_flag_free_tyre_change: true
 
 # Lap-time cost of carrying fuel, s per kg per lap: Normal(mean, sd) prior. An engineering rule of
 # thumb (~0.3 s per 10 kg), not an FIA figure; the sd keeps it a prior, not a constant.
@@ -18,3 +30,20 @@ eras:
 fuel_effect_s_per_kg:
   mean: 0.03
   sd: 0.01
+
+# One-off rules for single races, on top of the era's. The simulator disqualifies a strategy that
+# breaks one, as the stewards would.
+# min_stops: pit stops with a tyre change. max_stint_laps: laps raced on one set in the race (the
+# 2023 rule also counted laps run before the race, which OpenF1's tyre age does not match exactly).
+race_rules:
+  # Qatar 2023: 18 laps per set after sidewall damage from the kerbs.
+  # Source: https://www.motorsport.com/f1/news/fia-mandates-maximum-18-lap-stints-in-qatar-gp-due-to-tyre-issues/10530448/
+  - {season: 2023, round: 17, max_stint_laps: 18}
+  # Monaco 2025 and 2026: at least two stops.
+  # Source: https://www.formula1.com/en/latest/article/explained-what-is-the-new-two-stop-rule-for-the-monaco-grand-prix-and-how.1qropbdmR05S3BqgYsHtpE
+  # Source (2026): https://www.motorsport.com/f1/news/why-controversial-two-stop-monaco-gp-rule-remains-for-2026-for-now/10748931/
+  - {season: 2025, round: 8, min_stops: 2}
+  - {season: 2026, round: 6, min_stops: 2}
+  # Qatar 2025: 25 laps per set, counted over the whole weekend.
+  # Source: https://www.motorsport.com/f1/news/pirelli-mandates-25-lap-stints-for-qatar-gp-over-tyre-concerns/10777401/
+  - {season: 2025, round: 23, max_stint_laps: 25}

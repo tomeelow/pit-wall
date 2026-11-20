@@ -1,0 +1,545 @@
+{
+  "$defs": {
+    "Car": {
+      "additionalProperties": false,
+      "properties": {
+        "driver": {
+          "type": "string"
+        },
+        "team_id": {
+          "type": "string"
+        },
+        "pace_from": {
+          "enum": [
+            "driver",
+            "field"
+          ],
+          "type": "string"
+        },
+        "pace_s": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "slope_s_per_lap": {
+          "items": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "dnf_rate_per_lap": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "stops": {
+          "items": {
+            "$ref": "#/$defs/PlannedStop"
+          },
+          "type": "array"
+        },
+        "finish_position": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "retired_after_lap": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "driver",
+        "team_id",
+        "pace_from",
+        "pace_s",
+        "slope_s_per_lap",
+        "dnf_rate_per_lap",
+        "stops",
+        "finish_position",
+        "retired_after_lap"
+      ],
+      "title": "Car",
+      "type": "object"
+    },
+    "Degradation": {
+      "additionalProperties": false,
+      "description": "Free-air lap time = race_median_s + pace_s[car] + offset_s[compound]\n+ slope_s_per_lap[car][compound] * tyre_age + fuel_s_per_kg * fuel_kg(lap)\n+ StudentT(nu, 0, noise_sd_s), where fuel_kg(lap) = race_fuel_kg * (1 - (lap - 0.5) / laps)\nand tyre_age counts the lap being driven.",
+      "properties": {
+        "race_median_s": {
+          "type": "number"
+        },
+        "race_fuel_kg": {
+          "type": "number"
+        },
+        "fuel_s_per_kg": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "nu": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "noise_sd_s": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "offset_s": {
+          "items": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "race_median_s",
+        "race_fuel_kg",
+        "fuel_s_per_kg",
+        "nu",
+        "noise_sd_s",
+        "offset_s"
+      ],
+      "title": "Degradation",
+      "type": "object"
+    },
+    "DirtyAirBin": {
+      "additionalProperties": false,
+      "properties": {
+        "gap_upto_s": {
+          "type": "number"
+        },
+        "loss_s": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "gap_upto_s",
+        "loss_s"
+      ],
+      "title": "DirtyAirBin",
+      "type": "object"
+    },
+    "Mechanics": {
+      "additionalProperties": false,
+      "properties": {
+        "follow_gap_s": {
+          "type": "number"
+        },
+        "restart_gap_s": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "follow_gap_s",
+        "restart_gap_s"
+      ],
+      "title": "Mechanics",
+      "type": "object"
+    },
+    "Neutralisation": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "SC",
+            "VSC",
+            "RED"
+          ],
+          "type": "string"
+        },
+        "start_lap": {
+          "type": "integer"
+        },
+        "end_lap": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "start_lap",
+        "end_lap"
+      ],
+      "title": "Neutralisation",
+      "type": "object"
+    },
+    "NeutralisationParams": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "SC",
+            "VSC",
+            "RED"
+          ],
+          "type": "string"
+        },
+        "rate_per_lap": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "duration_laps": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "lap_factor": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "kind",
+        "rate_per_lap",
+        "duration_laps",
+        "lap_factor"
+      ],
+      "title": "NeutralisationParams",
+      "type": "object"
+    },
+    "PitLoss": {
+      "additionalProperties": false,
+      "description": "Time a stop costs over the in-lap and out-lap: (transit_s + a stationary time) x the\nfactor of the condition it is made under (1 when green).",
+      "properties": {
+        "transit_s": {
+          "type": "number"
+        },
+        "stationary_s": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "sc_factor": {
+          "type": "number"
+        },
+        "vsc_factor": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "transit_s",
+        "stationary_s",
+        "sc_factor",
+        "vsc_factor"
+      ],
+      "title": "PitLoss",
+      "type": "object"
+    },
+    "PlannedStop": {
+      "additionalProperties": false,
+      "properties": {
+        "lap": {
+          "type": "integer"
+        },
+        "compound_c": {
+          "type": "integer"
+        },
+        "tyre_age": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "lap",
+        "compound_c",
+        "tyre_age"
+      ],
+      "title": "PlannedStop",
+      "type": "object"
+    },
+    "Rules": {
+      "additionalProperties": false,
+      "description": "What every finishing strategy must satisfy; breaking a rule is a disqualification. A stop\nunder a red flag costs nothing when red_flag_free_tyre_change is set.",
+      "properties": {
+        "min_dry_compounds": {
+          "type": "integer"
+        },
+        "min_stops": {
+          "type": "integer"
+        },
+        "max_stint_laps": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "red_flag_free_tyre_change": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "min_dry_compounds",
+        "min_stops",
+        "max_stint_laps",
+        "red_flag_free_tyre_change"
+      ],
+      "title": "Rules",
+      "type": "object"
+    },
+    "Snapshot": {
+      "additionalProperties": false,
+      "description": "Race state after `lap` was completed. Lists are per car, in SimRace.cars order; None for a\ncar that has retired. A stop made at the end of `lap` has already happened.",
+      "properties": {
+        "lap": {
+          "type": "integer"
+        },
+        "race_time_s": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "compound_c": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "tyre_age": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "stint_laps": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "stops": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "dry_compounds": {
+          "items": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "lap",
+        "race_time_s",
+        "compound_c",
+        "tyre_age",
+        "stint_laps",
+        "stops",
+        "dry_compounds"
+      ],
+      "title": "Snapshot",
+      "type": "object"
+    },
+    "Traffic": {
+      "additionalProperties": false,
+      "description": "P(pass the car ahead on a green lap) = logistic(intercept + beta_gap_s * gap\n+ beta_pace_delta_s * pace delta + beta_within_drs * [gap <= drs_gap_s]) for gap <= max_gap_s.\nThe intercept includes the track's effect.",
+      "properties": {
+        "max_gap_s": {
+          "type": "number"
+        },
+        "drs_gap_s": {
+          "type": "number"
+        },
+        "dirty_air": {
+          "items": {
+            "$ref": "#/$defs/DirtyAirBin"
+          },
+          "type": "array"
+        },
+        "intercept": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "beta_gap_s": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "beta_pace_delta_s": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "beta_within_drs": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "max_gap_s",
+        "drs_gap_s",
+        "dirty_air",
+        "intercept",
+        "beta_gap_s",
+        "beta_pace_delta_s",
+        "beta_within_drs"
+      ],
+      "title": "Traffic",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "0.2.0",
+      "type": "string"
+    },
+    "season": {
+      "type": "integer"
+    },
+    "round": {
+      "type": "integer"
+    },
+    "name": {
+      "type": "string"
+    },
+    "era": {
+      "type": "string"
+    },
+    "total_laps": {
+      "type": "integer"
+    },
+    "dataset_version": {
+      "type": "string"
+    },
+    "draws": {
+      "type": "integer"
+    },
+    "rules": {
+      "$ref": "#/$defs/Rules"
+    },
+    "mechanics": {
+      "$ref": "#/$defs/Mechanics"
+    },
+    "compounds": {
+      "items": {
+        "type": "integer"
+      },
+      "type": "array"
+    },
+    "degradation": {
+      "$ref": "#/$defs/Degradation"
+    },
+    "pit_loss": {
+      "$ref": "#/$defs/PitLoss"
+    },
+    "neutralisations": {
+      "items": {
+        "$ref": "#/$defs/NeutralisationParams"
+      },
+      "type": "array"
+    },
+    "traffic": {
+      "$ref": "#/$defs/Traffic"
+    },
+    "cars": {
+      "items": {
+        "$ref": "#/$defs/Car"
+      },
+      "type": "array"
+    },
+    "snapshots": {
+      "items": {
+        "$ref": "#/$defs/Snapshot"
+      },
+      "type": "array"
+    },
+    "realised": {
+      "items": {
+        "$ref": "#/$defs/Neutralisation"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "season",
+    "round",
+    "name",
+    "era",
+    "total_laps",
+    "dataset_version",
+    "draws",
+    "rules",
+    "mechanics",
+    "compounds",
+    "degradation",
+    "pit_loss",
+    "neutralisations",
+    "traffic",
+    "cars",
+    "snapshots",
+    "realised"
+  ],
+  "title": "SimRace",
+  "type": "object"
+}
