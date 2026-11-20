@@ -72,6 +72,16 @@ def test_2026_red_flag_is_announced_in_text_only() -> None:
     assert issues == []
 
 
+def test_2026_vsc_is_abbreviated() -> None:
+    found, issues = periods(
+        message(12, "VSC DEPLOYED", minute=20),
+        message(13, "VSC ENDING", minute=22),
+        message(50, minute=90, flag="CHEQUERED"),
+    )
+    assert found == [("VSC", 12, 13, "end_message")]
+    assert issues == []
+
+
 def test_vsc_upgraded_to_safety_car() -> None:
     found, issues = periods(
         message(20, "VIRTUAL SAFETY CAR DEPLOYED", minute=30),

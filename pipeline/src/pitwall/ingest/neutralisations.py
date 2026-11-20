@@ -7,6 +7,10 @@ import pandas as pd
 
 SC, VSC, RED = "SC", "VSC", "RED"
 
+# 2023-2025 race control spells VSC out; 2026 abbreviates it.
+VSC_DEPLOYED = {"VIRTUAL SAFETY CAR DEPLOYED", "VSC DEPLOYED"}
+VSC_ENDING = {"VIRTUAL SAFETY CAR ENDING", "VSC ENDING"}
+
 COLUMNS = ["kind", "start_lap", "end_lap", "start_utc", "end_utc", "ended_by"]
 
 
@@ -91,9 +95,9 @@ def parse_neutralisations(race_control: pd.DataFrame) -> tuple[pd.DataFrame, lis
             parser.start(SC, lap, utc)
         elif text == "SAFETY CAR IN THIS LAP":
             parser.end(SC, lap, utc, "end_message")
-        elif text == "VIRTUAL SAFETY CAR DEPLOYED":
+        elif text in VSC_DEPLOYED:
             parser.start(VSC, lap, utc)
-        elif text == "VIRTUAL SAFETY CAR ENDING":
+        elif text in VSC_ENDING:
             parser.end(VSC, lap, utc, "end_message")
         elif red_flag and RED not in parser.open:  # one stoppage is announced several ways
             parser.end(SC, lap, utc, "red_flag")

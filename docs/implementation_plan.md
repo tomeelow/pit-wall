@@ -314,6 +314,9 @@ Implemented in `pitwall.laps` (classes), `pitwall.race_state` (snapshots) and `p
   on that text, a Track RED flag or `SESSION ABORTED`; it ends at `SESSION STARTED` or an SC
   restart. `TRACK CLEAR` during a suspension does not end it (2026 R13 previously read as SC to
   the flag).
+- **2026 abbreviates VSC** ("VSC DEPLOYED" / "VSC ENDING"). The parser missed all 25 VSC periods
+  in 2026 until this was fixed; most of those laps were already excluded as `yellow` (2026 clean
+  laps: 11,829 → 11,819 after the fix), so the Phase 3 fit is unaffected.
 - **In-laps are inferred** from the next lap being an out-lap, which covers 2023 R1–R6 (no pit
   records).
 - **`wet` comes from the compound only**; there is no rain flag in the classification.
