@@ -1261,6 +1261,12 @@ telemetry lazily per driver-lap). CI fails a bundle that exceeds them.
 - **Debrief on demand.** Decision regret runs in the browser on the worker pool, per driver or for
   the whole field (Bahrain 2023: 75 s for 20 drivers on a 10-core laptop), and fills the biggest-swings tables as
   drivers finish. Worst calls (ex ante) and worst outcomes (ex post) are separate tables.
+- **Coverage and size.** 88 of 90 races have a replay; 1,734 telemetry laps in all. São Paulo 2024
+  was wet, so no lap counts as at pace; OpenF1 has no location for Monaco 2026's reference lap.
+  Miami 2025 has telemetry but no race times (Phase 7), so its replay says so instead of drawing.
+  Drivers without a lap at pace (early retirements) have no telemetry. Largest files, gzipped:
+  race and sim 67 KB, replay 9.6 KB, telemetry lap 3.9 KB, far inside the budgets. Raw cache:
+  160 MB after the backfill.
 
 ---
 

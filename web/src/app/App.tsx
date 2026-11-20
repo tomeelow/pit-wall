@@ -150,7 +150,8 @@ function Lab({ manifest }: { manifest: Manifest }) {
     if (replay.status === "none") {
       return (
         <Empty title="No replay for this race yet">
-          Replay and telemetry need the race&rsquo;s fastest laps, which the pipeline has not fetched for this race.
+          Replay and telemetry start from the race&rsquo;s fastest lap at pace. A wet race has none, and OpenF1 can be
+          missing a lap&rsquo;s location.
         </Empty>
       );
     }
@@ -158,6 +159,13 @@ function Lab({ manifest }: { manifest: Manifest }) {
     if (replay.status === "error") return <Failure message={replay.message} />;
     if (race.status !== "ready") return <Skeleton rows={14} label="Loading the race" />;
     const onDriver = (d: string) => change({ driver: d, lap: null });
+    if (view.tab === "replay" && replay.value.cars.length === 0) {
+      return (
+        <Empty title="No lap timing for this race">
+          The race state has no race times to place the cars by; telemetry still works.
+        </Empty>
+      );
+    }
     if (view.tab === "replay") {
       return <ReplayView key={entry.path} race={race.value} replay={replay.value} driver={driver} onDriver={onDriver} />;
     }
