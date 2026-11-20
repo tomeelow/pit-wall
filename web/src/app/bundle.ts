@@ -1,3 +1,4 @@
+import type { Calibration } from "../contract/calibration";
 import type { Manifest } from "../contract/manifest";
 import type { Race } from "../contract/race";
 import type { SimRace } from "../contract/sim";
@@ -27,3 +28,4 @@ async function fetchBundleFile<T extends { schema_version: string }>(path: strin
 export const loadManifest = () => fetchBundleFile<Manifest>("manifest.json");
 export const loadRace = (path: string) => fetchBundleFile<Race>(path);
 export const loadSim = (path: string) => fetchBundleFile<SimRace>(path);
+export const loadCalibration = (path: string) => fetchBundleFile<Calibration>(path);

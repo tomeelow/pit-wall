@@ -1,89 +1,212 @@
 import { useEffect, useState } from "react";
 import type { Manifest } from "../contract/manifest";
-import type { Race } from "../contract/race";
-import { loadManifest, loadRace } from "./bundle";
-import { StintChart } from "./StintChart";
+import { loadCalibration, loadManifest, loadRace, loadSim } from "./bundle";
+import { useLoad } from "./hooks";
+import { ModelCard } from "./ModelCard";
+import { Optimise } from "./Optimise";
+import { decisionLaps } from "./plan";
+import { RaceView } from "./RaceView";
+import { Empty, Failure, Skeleton } from "./States";
+import { Undercut } from "./Undercut";
+import { raceKey, readView, writeView, type Tab, type View } from "./url";
+import { WhatIf } from "./WhatIf";
 
-const COMPOUND_LEGEND = ["soft", "medium", "hard", "intermediate", "wet"] as const;
+const TAB_NAMES: Record<Tab, string> = {
+  race: "Race",
+  whatif: "What if",
+  optimise: "Optimise",
+  undercut: "Undercut",
+  model: "Model card",
+};
+
+const MANIFEST = "manifest.json";
+
+function useView(): [View, (change: Partial<View>) => void] {
+  const [view, setView] = useState(() => readView(location.search));
+  useEffect(() => {
+    const back = () => setView(readView(location.search));
+    addEventListener("popstate", back);
+    return () => removeEventListener("popstate", back);
+  }, []);
+  const change = (next: Partial<View>) => {
+    const merged = { ...view, ...next };
+    history.pushState(null, "", writeView(merged));
+    setView(merged);
+  };
+  return [view, change];
+}
+
+function useTheme(): [string, () => void] {
+  const [theme, setTheme] = useState(() => document.documentElement.dataset.theme ?? "dark");
+  const toggle = () => {
+    const next = theme === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = next;
+    try {
+      localStorage.setItem("theme", next);
+    } catch {
+      // Storage can be blocked; the choice then lasts until reload.
+    }
+    setTheme(next);
+  };
+  return [theme, toggle];
+}
 
 export function App() {
-  const [manifest, setManifest] = useState<Manifest>();
-  const [racePath, setRacePath] = useState<string>();
-  const [race, setRace] = useState<Race>();
-  const [error, setError] = useState<string>();
+  const manifest = useLoad(MANIFEST, loadManifest);
+  return (
+    <>
+      {manifest.status === "ready" ? (
+        <Lab manifest={manifest.value} />
+      ) : (
+        <>
+          <Bar />
+          <main className="main">
+            {manifest.status === "error" ? <Failure message={manifest.message} /> : <Skeleton rows={12} label="Loading races" />}
+          </main>
+        </>
+      )}
+      <footer className="footer">
+        Unofficial project, not affiliated with Formula 1. Data from OpenF1 and Jolpica.
+      </footer>
+    </>
+  );
+}
 
-  useEffect(() => {
-    loadManifest()
-      .then((loaded) => {
-        setManifest(loaded);
-        setRacePath(loaded.races.at(-1)?.path);
-      })
-      .catch((e: unknown) => setError(String(e)));
-  }, []);
+function Bar({ children }: { children?: React.ReactNode }) {
+  const [theme, toggle] = useTheme();
+  return (
+    <header className="bar">
+      <span className="wordmark">Pit Wall</span>
+      {children}
+      <button type="button" className="quiet theme" onClick={toggle}>
+        {theme === "dark" ? "Light" : "Dark"}
+      </button>
+    </header>
+  );
+}
 
-  useEffect(() => {
-    if (!racePath) return;
-    let current = true;
-    loadRace(racePath)
-      .then((loaded) => current && setRace(loaded))
-      .catch((e: unknown) => current && setError(String(e)));
-    return () => {
-      current = false;
-    };
-  }, [racePath]);
+function Lab({ manifest }: { manifest: Manifest }) {
+  const [view, change] = useView();
+  const simulated = manifest.races.filter((r) => r.sim_path);
+  const entry =
+    manifest.races.find((r) => raceKey(r) === view.race) ?? simulated.at(-1) ?? manifest.races.at(-1);
+  const race = useLoad(entry?.path ?? null, loadRace);
+  const sim = useLoad(entry?.sim_path ?? null, loadSim);
+  const calibration = useLoad(manifest.calibration_path, loadCalibration);
+  const drivers = race.status === "ready" ? race.value.drivers.map((d) => d.driver) : [];
+  const driver = view.driver && drivers.includes(view.driver) ? view.driver : (drivers[0] ?? null);
+  const seasons = [...new Set(manifest.races.map((r) => r.season))];
+
+  if (!entry) {
+    return (
+      <>
+        <Bar />
+        <main className="main">
+          <Empty title="No races exported yet">Run the weekend pipeline to publish a bundle.</Empty>
+        </main>
+      </>
+    );
+  }
+
+  const simReady = sim.status === "ready" ? sim.value : null;
+  const car = simReady && driver ? simReady.cars.findIndex((c) => c.driver === driver) : -1;
+  const laps = simReady && car >= 0 ? decisionLaps(simReady, car) : [];
+  const firstStop = simReady && car >= 0 ? simReady.cars[car]!.stops[0]?.lap : undefined;
+  const fallback = firstStop && laps.includes(firstStop - 1) ? firstStop - 1 : (laps[0] ?? 1);
+  const fromLap = view.lap !== null && laps.includes(view.lap) ? view.lap : fallback;
+  const tool = { settings: manifest.strategy, laps, fromLap, onLap: (lap: number) => change({ lap }) };
+
+  const strategy = () => {
+    if (sim.status === "none") {
+      return (
+        <Empty title="No simulation for this race">
+          The race view works for every race; the strategy tools need a simulation bundle, which this race
+          does not have yet.
+        </Empty>
+      );
+    }
+    if (sim.status === "loading") return <Skeleton rows={10} label="Loading the simulation" />;
+    if (sim.status === "error") return <Failure message={sim.message} />;
+    if (car < 0 || laps.length === 0) {
+      return <Empty title={`No race state for ${driver ?? "this driver"}`}>Pick a driver who started the race.</Empty>;
+    }
+    const key = `${entry.path}:${driver}`;
+    if (view.tab === "whatif") return <WhatIf key={key} race={sim.value} car={car} {...tool} />;
+    if (view.tab === "optimise") return <Optimise key={key} race={sim.value} car={car} {...tool} />;
+    return <Undercut key={key} race={sim.value} car={car} {...tool} />;
+  };
 
   return (
-    <main>
-      <header>
-        <h1>Pit Wall</h1>
-        <p className="tagline">Race strategy lab</p>
-      </header>
-
-      {error && <p className="error">{error}</p>}
-      {!manifest && !error && <p className="muted">Loading races…</p>}
-      {manifest?.races.length === 0 && <p className="muted">No races exported yet.</p>}
-
-      {manifest && manifest.races.length > 0 && (
-        <label className="race-picker">
-          Race{" "}
-          <select value={racePath} onChange={(e) => setRacePath(e.target.value)}>
-            {manifest.races.map((entry) => (
-              <option key={entry.path} value={entry.path}>
-                {entry.season} · R{entry.round} · {entry.name}
-              </option>
-            ))}
-          </select>
+    <>
+      <Bar>
+        <label className="visually-hidden" htmlFor="race">
+          Race
         </label>
-      )}
-
-      {race && (
-        <section>
-          <h2>
-            Tyre strategies — {race.name} {race.season}
-          </h2>
-          <ul className="legend">
-            {COMPOUND_LEGEND.map((compound) => (
-              <li key={compound}>
-                <span className={`swatch compound-${compound}`} />
-                {compound}
-              </li>
-            ))}
-          </ul>
-          <div className="chart-scroll">
-            <StintChart race={race} />
-          </div>
-        </section>
-      )}
-
-      <footer className="muted">
-        {manifest && (
-          <p>
-            Bundle {manifest.git_sha} · schema {manifest.schema_version}
-            {race && <> · dataset {race.dataset_version}</>}
-          </p>
+        <select
+          id="race"
+          className="input"
+          value={raceKey(entry)}
+          onChange={(e) => change({ race: e.target.value, lap: null })}
+        >
+          {seasons.map((season) => (
+            <optgroup key={season} label={String(season)}>
+              {manifest.races
+                .filter((r) => r.season === season)
+                .map((r) => (
+                  <option key={r.path} value={raceKey(r)}>
+                    {r.name} {r.season}
+                    {r.sim_path ? "" : " (race view only)"}
+                  </option>
+                ))}
+            </optgroup>
+          ))}
+        </select>
+        <label className="visually-hidden" htmlFor="driver">
+          Driver
+        </label>
+        <select
+          id="driver"
+          className="input"
+          value={driver ?? ""}
+          disabled={drivers.length === 0}
+          onChange={(e) => change({ driver: e.target.value, lap: null })}
+        >
+          {drivers.map((d) => (
+            <option key={d} value={d}>
+              {d}
+            </option>
+          ))}
+        </select>
+        <nav aria-label="Tools">
+          {(Object.keys(TAB_NAMES) as Tab[]).map((tab) => (
+            <a
+              key={tab}
+              href={writeView({ ...view, tab })}
+              aria-current={view.tab === tab ? "page" : undefined}
+              onClick={(e) => {
+                e.preventDefault();
+                change({ tab });
+              }}
+            >
+              {TAB_NAMES[tab]}
+            </a>
+          ))}
+        </nav>
+      </Bar>
+      <main className="main">
+        {view.tab === "race" &&
+          (race.status === "ready" ? (
+            <RaceView race={race.value} sim={simReady} driver={driver} onDriver={(d) => change({ driver: d, lap: null })} />
+          ) : race.status === "error" ? (
+            <Failure message={race.message} />
+          ) : (
+            <Skeleton rows={20} label="Loading the race" />
+          ))}
+        {(view.tab === "whatif" || view.tab === "optimise" || view.tab === "undercut") && strategy()}
+        {view.tab === "model" && (
+          <ModelCard manifest={manifest} entry={entry} sim={simReady} calibration={calibration} />
         )}
-        <p>Unofficial project, not affiliated with Formula 1. Data: OpenF1.</p>
-      </footer>
-    </main>
+      </main>
+    </>
   );
 }

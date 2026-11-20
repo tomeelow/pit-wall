@@ -1,17 +1,18 @@
 import type { SimRace } from "../contract/sim";
-import type { Outcome, Query } from "../sim/index.ts";
-import { runSimulations } from "../sim/index.ts";
+import type { Outcome, Query, UndercutQuery, UndercutResult } from "../sim/index.ts";
+import { runSimulations, undercut } from "../sim/index.ts";
 
-export interface Job {
-  race: SimRace;
-  query: Query;
-  first: number;
-  runs: number;
-}
+export type Job =
+  | { kind: "runs"; race: SimRace; query: Query; first: number; runs: number }
+  | { kind: "undercut"; race: SimRace; query: UndercutQuery };
+
+export type Reply = Outcome | UndercutResult | { error: string };
 
 /** What a worker does with a job; kept apart from the worker globals so tests can call it. */
-export function handle(job: Job): Outcome {
-  return runSimulations(job.race, job.query, job.first, job.runs);
+export function handle(job: Job): Outcome | UndercutResult {
+  return job.kind === "runs"
+    ? runSimulations(job.race, job.query, job.first, job.runs)
+    : undercut(job.race, job.query);
 }
 
 /** Contiguous run ranges, one per worker, as even as possible. */
