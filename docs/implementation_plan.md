@@ -24,7 +24,7 @@ Update this table as phases land. It is the first thing to read when picking up 
 | 1 — Ingestion | ☑ done | 90 races (2023 R1 – 2026 R20) ingested, 0 rejected; allocations sourced from Pirelli releases. Known source gaps listed under Phase 1 → Findings |
 | 2 — Lap classification & race state | ☑ done | 90 races rebuilt, 50.5 % of 100,749 laps clean; race-state order matches OpenF1's position feed on ≥ 98 % of driver-laps in every race. Simplifications and data quirks under Phase 2 → Findings |
 | 3 — Tyre degradation model | ☑ done | Both era fits pass the gate; draws per race in `.data`. LORO: model beats the flat-median baseline only modestly (MAE 0.725 vs 0.758 s); details and the weak-OLS caveat under Phase 3 → Findings |
-| 4 — Pit loss, SC/VSC, reliability | ☐ not started | |
+| 4 — Pit loss, SC/VSC, reliability | ☑ done | Pit loss per track (green 19–28 s; SC 0.82×, VSC 0.84×), SC/VSC/red/DNF rates per race with that race masked out; per-track rates barely beat era-wide. **2026 VSC rate wrong until 2026 races are rebuilt from cache.** Phase 4 → Findings |
 | 5 — Traffic & overtaking | ☐ not started | |
 | 6 — Simulation engine | ☐ not started | |
 | 7 — Simulator validation | ☐ not started | |
@@ -384,8 +384,18 @@ gate:
 
 | Era | Clean laps | Races | Left out | max R̂ | ESS bulk / tail | Divergences | fuel effect (s/kg) |
 |---|---|---|---|---|---|---|---|
-| 2023–2025 | 39,041 | 69 | C6 (one race) | 1.006 | 749 / 1117 | 0 | 0.0291 (0.0289–0.0293) |
-| 2026 | 11,829 | 20 | — | 1.005 | 1253 / 1042 | 0 | 0.0438 |
+| 2023–2025 | 39,041 | 69 | C6 (one race) | 1.007 | 1047 / 1522 | 0 | 0.0291 (0.0289–0.0293) |
+| 2026 | 11,829 | 20 | — | 1.005 | 1134 / 916 | 0 | 0.0438 |
+
+- **Zero-sum deviations.** Deviations are zero-sum within their parent:
+  - track slopes within each C-number;
+  - team slopes within each track and C-number;
+  - race offsets within each race.
+
+  Each group of k uses k − 1 free normals in a Helmert basis. With plain non-centred deviations,
+  a parent and the mean of its few children traded off along a ridge. The synthetic test fit then
+  landed either side of R̂ 1.01 depending on seed and platform, and CI failed on it. The table shows
+  the refit: slopes moved by under 0.002 s/lap, and the 2023–25 bulk ESS rose from 749.
 
 - Fuel effect is near the physics prior in 2023–25. In 2026 the data identify fuel_effect × race fuel
   mass; the 70 kg figure is **unverified** (secondary source; the FIA regulations cap energy flow,
@@ -400,8 +410,8 @@ gate:
 - **No curvature:** median residual by tyre-age bin is ≈ 0 for every compound in the 30+ lap bin.
   Linear degradation stays.
 - **Warm-up is visible:** 2023–25 C2 is −0.11 s in the first 5 laps; 2026 C4 is +0.16 s and C5
-  +0.10 s. Warm-up and the out-lap term move to Phase 4 alongside pit loss, where the undercut needs
-  them.
+  +0.10 s. Warm-up and the out-lap term move to the undercut module (Phase 8; see Phase 4 →
+  Findings).
 - Posterior predictive checks so far are the residual-by-age table in each model card, not plots.
 - Draws: 200 per race in `.data/races/*/degradation_draws.parquet` for every race except 2024 R21,
   which has no clean laps. They are not in the contract yet; that is Phase 6.
@@ -464,6 +474,105 @@ is a forecast: each method sees only the stint's first 3 clean laps and predicts
 
 **Deliverable:** fitted parameters exported per track, a validation table of predicted vs observed
 SC rates per track (held-out seasons), tests for SC-period extraction from race control messages.
+
+### Findings (first fit, 2023 R1 – 2026 R20)
+
+Code: `pitwall.models.pit_loss`, `pitwall.models.hazards` and `pitwall.models.events`.
+Commands: `make fit-events` and `make validate-events`. Thresholds and priors are under
+`config/pipeline.yaml` → `events`.
+
+Outputs per race in `.data/races/*/`:
+- `events.json`: pit loss, SC/VSC factors, stationary times and durations;
+- `hazard_draws.parquet`: 200 rate draws for the track and for each team.
+
+Not in the contract yet; that is Phase 6.
+
+**Pit loss**
+- 2,250 tyre stops measured: 2,011 green, 190 under SC, 49 under VSC.
+- Excluded:
+  - stops without a tyre change;
+  - stops whose lane time is over 1.5 × the race median (penalties and queues);
+  - red flags;
+  - 2023 R1–R6, which have no pit records.
+- A stop's loss is (in-lap + out-lap) minus the field's median lap on those same laps, minus twice
+  the driver's usual gap to the field. Comparing against the field on the same laps handles fuel,
+  track evolution and safety cars in one definition.
+- The measured loss is net of tyre age: the in-lap runs older tyres than the field and the
+  out-lap newer ones. The bias is under about 1 s; see the module docstring before using the loss
+  in the simulator.
+- Median green loss per track runs from 19.0 s at Spa to 28.3 s at Lusail. Monaco is 20.1 s,
+  Singapore 26.1 s and Imola 27.6 s.
+  - Transit (loss minus stationary time) uses stops with OpenF1 stationary times, which start
+    mid-2024.
+  - Other tracks take the loss minus the era's median stationary time.
+  - An unseen track takes the median across tracks (`pit_loss_from: "era"`).
+- **Under SC and VSC:** the median loss is 0.82× and 0.84× the same track's green loss. This is a
+  smaller discount than the usual "half price" folklore. The measured loss is relative to cars
+  that stayed out on the same laps, and part of an SC lap is often run at green speed before the
+  field bunches. 49 VSC stops is a small sample.
+- **Stationary time:** 1,103 timed stops. Median 2.8 s, 90th percentile 5.5 s, 99th 14.4 s. The
+  simulator samples from all of them, so slow stops come with them.
+- **Lap time under SC / VSC:** median 1.46× / 1.24× the race's median clean lap, for cars not
+  pitting.
+- Crew speed is not modelled per team: one distribution per era.
+- **Per-compound warm-up is not modelled yet; it moves to Phase 8.** The pit loss already
+  contains the average out-lap warm-up. Phase 3's residuals show the per-compound part is
+  ±0.1–0.16 s over the first laps of a stint. Its only consumer is the undercut module, so it is
+  fitted there, on `out_lap` and early-stint laps.
+
+**SC / VSC / red flag / DNF rates**
+- One Poisson model (nutpie):
+  - families are kind × phase: `lap1`, and `running` (per lap at risk, laps under any
+    neutralisation excluded);
+  - an era level per family;
+  - a partially pooled deviation per track (neutralisations) or per team and era (DNF).
+- Every retirement counts as a DNF. OpenF1 gives no reason, so crashes are included, and their
+  link to safety cars is not modelled (the hazards are independent).
+- **Information-set rule:** each race's exported rates come from a refit with that race's rows
+  masked out (exposure 0). The race's own SCs, red flags and DNFs never inform its simulation.
+  This takes 90 refits, about 5 min in total, each gated.
+  - Stationary times and durations also exclude the race itself.
+  - Transit and the SC/VSC factors use every race, the same documented softening as pace.
+- **Sampler:** `unit_sd` is HalfNormal(0.5).
+  - The track-to-track spread of 11 red flags is not identifiable. With HalfNormal(1), the
+    red-flag spread formed a funnel that failed the gate (R̂ 1.013).
+  - At 0.5, a track can still run at about 2.7× its era's rate at two sd.
+  - Settings: 1500 tune / 2000 draws, target 0.98.
+  - Result: all 90 masked fits pass. Worst R̂ 1.006, minimum ESS 1063, no divergences.
+- Era medians, 2023–25:
+
+  | Event | Lap 1 | Per lap afterwards |
+  |---|---|---|
+  | SC | 0.13 | 0.0085 |
+  | VSC | 0.010 | 0.0077 |
+  | Red flag | 0.032 | 0.0016 |
+  | DNF | 0.018 per car | 0.0016 per car |
+
+  2026 runs at 0.0029 DNFs per car-lap: the new power units retire cars more often.
+- **2026 VSC rate is wrong until the stored 2026 races are rebuilt.** Until the parser fix (Phase 2
+  findings), 2026 neutralisation tables had no VSCs, and the fit reads 0.0005/lap. The rebuild runs
+  from the response cache and needs no API calls.
+
+**Validation** (`validate-events`: leave one season out, 2023–2025; 70 races). The metric is the
+probability of at least one event per race, ex ante. The baseline is the share of the same era's
+training races with at least one.
+
+| Kind | Observed rate | Brier model / baseline | Log loss model / baseline |
+|---|---|---|---|
+| SC | 0.47 | 0.250 / 0.263 | 0.693 / 0.720 |
+| VSC | 0.39 | 0.238 / 0.240 | 0.668 / 0.673 |
+| Red flag | 0.11 | 0.108 / 0.105 | 0.380 / 0.375 |
+
+- **The per-track rates barely beat the era-wide rate.** For red flags they are marginally worse.
+  With 2–3 races per track, a track's history is mostly noise, and partial pooling rightly keeps
+  tracks near their era. An SC log loss of 0.693 = ln 2 means that whether a given race will see a
+  safety car is close to a coin flip, and nothing in this data predicts it much better.
+- The simulator should therefore treat SC timing as genuinely uncertain. That is what the
+  distribution of outcomes is for.
+- Per track, observed vs expected counts are in `.data/models/events/validation.md`. No track is
+  far outside its expectation over 2–3 races.
+- Street vs permanent circuit is the obvious next covariate. It was not added: the per-track terms,
+  which would absorb it, show little signal.
 
 ---
 
@@ -573,6 +682,9 @@ Given attacker, defender, lap: P(attacker ahead after both have stopped) for "at
 defender responds next lap" and the overcut mirror. Uses out-lap warm-up penalty, degradation of the
 old set, pit-loss distribution, and rejoin traffic from the snapshot. Expose the components (gap,
 tyre delta per lap, pit-loss spread) so the user sees *why*.
+- The per-compound warm-up term is fitted here, on `out_lap` and early-stint laps (moved from
+  Phases 3–4). The Phase 4 pit loss already contains the average warm-up, so this term is the
+  compound's deviation from it.
 
 ### Debrief: which decisions cost positions
 For each pit decision in the actual race: expected-position regret vs the best alternative at that

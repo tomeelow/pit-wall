@@ -71,6 +71,29 @@ class DegradationConfig(_Config):
     backtest: BacktestConfig
 
 
+class PitLossConfig(_Config):
+    min_field_cars: int = Field(ge=1)
+    max_lane_factor: float = Field(gt=1)
+
+
+class HazardPriors(_Config):
+    log_rate: NormalPrior
+    unit_sd: float = Field(gt=0)
+
+
+class HazardConfig(_Config):
+    sampler: SamplerConfig
+    priors: HazardPriors
+    gate: GateConfig
+    export_draws: int = Field(ge=1)
+    validation_seasons: list[int] = Field(min_length=1)
+
+
+class EventsConfig(_Config):
+    pit_loss: PitLossConfig
+    hazards: HazardConfig
+
+
 class PipelineConfig(_Config):
     data_dir: Path
     bundle_dir: Path
@@ -80,6 +103,7 @@ class PipelineConfig(_Config):
     validation: ValidationConfig
     classification: ClassificationConfig
     degradation: DegradationConfig
+    events: EventsConfig
 
 
 class Era(_Config):

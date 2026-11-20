@@ -91,3 +91,39 @@ degradation:
       - [2026, 6]    # Monaco
       - [2026, 11]   # Hungary
       - [2026, 13]   # Italy: red flag
+
+# Pit loss, neutralisations and retirements (Phase 4).
+events:
+  pit_loss:
+    # A stop's loss is measured against the median lap of the cars running normally on its in- and
+    # out-lap, corrected by the driver's own median gap to that field on clean laps. Laps with
+    # fewer comparison cars than this give no reference.
+    min_field_cars: 5
+    # Lane time above this x the race's median lane time is a penalty, repair or red-flag queue,
+    # not a tyre stop.
+    max_lane_factor: 1.5
+  hazards:
+    # A fit takes seconds, and every race gets its own masked refit, each gated: long chains and a
+    # high target keep rare families (three lap-1 red flags; their unit_sd funnels) under the gate.
+    sampler:
+      chains: 4
+      tune: 1500
+      draws: 2000
+      target_accept: 0.98
+      seed: 20260302
+    priors:
+      # Log events per lap (running) or per start (lap 1). exp(-4.5) ~ 0.011: about one SC every
+      # 90 laps. Wide: the data, not the prior, should set every rate.
+      log_rate: {mean: -4.5, sd: 2.0}
+      # Half-normal scale of a track's (or team's) log-rate deviation from its era. Three or four
+      # races per track cannot identify the spread; 0.5 still lets a track run at ~2.7x its era's
+      # rate at two sd (street circuits), and keeps the rare red-flag family out of a funnel.
+      unit_sd: 0.5
+    gate:
+      max_rhat: 1.01
+      min_ess: 400
+      max_divergences: 0
+    export_draws: 200
+    # Leave-one-season-out validation of the neutralisation rates. 2026 is not held out: with no
+    # 2026 race in training its era level would be prior only.
+    validation_seasons: [2023, 2024, 2025]
