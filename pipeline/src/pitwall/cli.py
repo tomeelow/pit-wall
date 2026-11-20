@@ -19,7 +19,7 @@ from pitwall.config import (
     load_thresholds,
 )
 from pitwall.export.bundle import export_bundle
-from pitwall.export.contract import Calibration, Manifest, SimRace, write_schemas
+from pitwall.export.contract import Manifest, SimRace, write_schemas
 from pitwall.ingest.openf1 import OpenF1, fetch_race, finished_rounds
 from pitwall.ingest.storage import (
     RaceTables,
@@ -30,7 +30,7 @@ from pitwall.ingest.storage import (
     write_race,
 )
 from pitwall.ingest.validate import RaceReport, check_prepared, validate_race, write_summary
-from pitwall.models import backtest, degradation, events, traffic
+from pitwall.models import backtest, degradation, events, traffic, warmup
 from pitwall.models.hazards import RateModel
 from pitwall.prepare import prepare_race
 from pitwall.validate import simulator
@@ -414,6 +414,44 @@ def validate_traffic(config: PipelineConfig) -> Path:
     return report
 
 
+def fit_warmup(config: PipelineConfig) -> None:
+    """Fit tyre warm-up per era and export each race's C-numbers to the race."""
+    regulations = load_regulations()
+    settings = config.warmup
+    frames, compounds = [], {}
+    for path in list_races(config.data_dir):
+        draws_path = path / "degradation_draws.parquet"
+        if not draws_path.exists():
+            continue
+        tables = read_race(path)
+        draws = pd.read_parquet(draws_path)
+        compounds[path] = sorted(int(c) for c in draws["compound_c"].unique())
+        frames.append(
+            warmup.warmup_laps(tables, draws, settings.stint_laps).assign(
+                race=degradation.race_id(tables.event.season, tables.event.round),
+                era=regulations.era_of(tables.event.season).name,
+                path=str(path),
+            )
+        )
+    laps = pd.concat(frames, ignore_index=True)
+    out = _model_dir(config, "warmup")
+    out.mkdir(parents=True, exist_ok=True)
+    for era, era_laps in laps.groupby("era"):
+        draws = warmup.fit(era_laps, settings)
+        card = warmup.model_card(str(era), era_laps, draws, _git_sha())
+        (out / f"{era}.json").write_text(card.model_dump_json(indent=2))
+        for path in era_laps["path"].unique():
+            race_draws = draws[draws["compound_c"].isin(compounds[Path(path)])]
+            race_draws.to_parquet(Path(path) / "warmup_draws.parquet", index=False)
+        logger.info(
+            "{}: warm-up from {} laps in {} races:\n{}",
+            era,
+            len(era_laps),
+            era_laps["race"].nunique(),
+            draws.groupby(["compound_c", "stint_lap"])["warmup_s"].median().unstack().round(2),
+        )
+
+
 def validate_sim(config: PipelineConfig) -> bool:
     """Run the engine ex ante over every simulable race in the exported bundle, score it and apply
     the publish gate. Needs `make export` first. A run that fails the gate is kept as
@@ -434,11 +472,7 @@ def validate_sim(config: PipelineConfig) -> bool:
     out = _model_dir(config, "sim")
     out.mkdir(parents=True, exist_ok=True)
     accepted_path = out / "calibration.json"
-    accepted = (
-        Calibration.model_validate_json(accepted_path.read_text())
-        if accepted_path.exists()
-        else None
-    )
+    accepted = simulator.accepted_overall(accepted_path)
     thresholds = load_thresholds().simulator
     report = simulator.calibration(scored, races, settings, accepted, thresholds, _git_sha())
     scored.drop(columns="counts").to_parquet(out / "validation.parquet", index=False)
@@ -497,6 +531,9 @@ def main() -> None:
     )
 
     commands.add_parser(
+        "fit-warmup", help="fit tyre warm-up per C-number and stint lap; export it per race"
+    )
+    commands.add_parser(
         "validate-sim", help="calibrate the simulator on the exported bundle; apply the gate"
     )
     commands.add_parser("export", help="write the static bundle from all ingested races")
@@ -527,6 +564,8 @@ def main() -> None:
                 sys.exit(1)
         case "validate-traffic":
             validate_traffic(config)
+        case "fit-warmup":
+            fit_warmup(config)
         case "validate-sim":
             if not validate_sim(config):
                 sys.exit(1)

@@ -76,6 +76,19 @@ Known softening: pace and degradation are fitted on the whole race, the simulate
 Random events (safety cars, retirements) never are. Opponents keep their actual strategies
 (open loop).
 
+## Strategy tools: known weaknesses
+
+- **The debrief prefers later stops.** Rivals cannot react, so covering an undercut is worth
+  nothing. Tyre wear is linear, with no cliff. Its "should have stopped later" verdicts on first
+  stops are therefore not evidence of a mistake.
+- **Plans cannot react either.** A stop the team made because a safety car came out is judged, ex
+  ante, as a planned green-flag stop.
+- **Undercut probabilities above 0.6 are too confident** on the few real pairs seen: predicted
+  0.70, happened 0.48. `make undercut-check` has the full table.
+- **Search assumptions:**
+  - Every compound counts as available new; which sets a driver had left is not in the data.
+  - Compounds the race barely ran are not proposed.
+
 ## Data sources
 
 [OpenF1](https://openf1.org), with [Jolpica](https://github.com/jolpica/jolpica-f1) planned for

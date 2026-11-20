@@ -4,7 +4,7 @@ import type { SimRace } from "../contract/sim";
 
 // Typed as the generated literal: when the pipeline bumps SCHEMA_VERSION, tsc fails here until
 // the app has been checked against the new contract.
-export const SUPPORTED_SCHEMA: Manifest["schema_version"] = "0.3.0";
+export const SUPPORTED_SCHEMA: Manifest["schema_version"] = "0.4.0";
 
 const major = (version: string) => version.split(".")[0];
 

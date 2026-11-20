@@ -28,7 +28,7 @@ Update this table as phases land. It is the first thing to read when picking up 
 | 5 — Traffic & overtaking | ☑ done | Dirty air only matters within 0.5 s (0.47 s/lap); pass model (gap, pace delta, within 1 s, track) beats the gap-only baseline out of sample (log loss 0.134 vs 0.173) and is well calibrated 1–70 %; under-predicts passes from 1.5–3 s back. Phase 5 → Findings |
 | 6 — Simulation engine | ☑ done | Seeded TS engine with CRN, worker pool and contract 0.2.0 sim inputs for 76/90 races; 10 000 × 60 × 20 in 1.5 s on one thread (CI budget 6 s); zero-noise replay misses the result by 1.24 positions vs 2.33 for the lap-1 order. Open-loop stops under sampled SCs fatten ex-ante tails — Phase 7's first question. Phase 6 → Findings |
 | 7 — Simulator validation | ☑ done | 75 dry races × 4 start laps × 1,000 ex-ante runs: coverage 0.48 / 0.78 at 50 / 80 %, log score −1.93 vs −2.38 for the order at the start lap; beats both baselines in every segment. Overconfident from 75 % distance (0.44 / 0.71) and after real neutralisations; Miami 2025 refused (race-time gap). Phase 7 → Findings |
-| 8 — Strategy optimiser, counterfactuals, undercut | ☐ not started | |
+| 8 — Strategy optimiser, counterfactuals, undercut | ☑ done | Counterfactual, optimiser (successive halving, recovers a known optimum), undercut and debrief in `web/src/sim`; tyre warm-up fitted (≤ 0.64 s, barely moves calibration). Undercut beats the base rate on 181 real pairs (Brier 0.185 vs 0.205). Full search 4 s on one thread. Debrief prefers later stops (open-loop rivals, linear wear). Phase 8 → Findings |
 | 9 — Strategy lab UI | ☐ not started | |
 | 10 — Analytics: replay, telemetry, debrief | ☐ not started | |
 | 11 — Post-weekend automation & publishing | ☐ not started | |
@@ -1033,6 +1033,165 @@ lap, evaluated **ex ante** (future events sampled — "was it a good call?") and
 
 **Deliverable:** query API inside the engine package, optimiser with tests (it must recover a known
 optimum on a synthetic race), undercut module with tests on hand-built scenarios.
+
+### Findings (first build, 2023 R1 – 2026 R20)
+
+**Where it lives.** Everything is in `web/src/sim/`, so nothing outside the one engine simulates:
+- `strategy.ts`:
+  - objectives;
+  - distributions;
+  - paired comparisons;
+  - `counterfactual`.
+- `candidates.ts`: candidate plans.
+- `optimise.ts`: successive halving.
+- `undercut.ts`: undercut and overcut.
+- `debrief.ts`: regret per pit decision.
+
+Searches take an `Evaluate` function:
+- `inProcess(race)` in Node and tests;
+- `SimPool.run(race, query, first)` in the browser. The pool now takes a start offset, so later
+  rounds reuse the runs already done.
+
+The search settings are in `config/pipeline.yaml` → `sim.strategy` and are published in the
+manifest (`Manifest.strategy`). Contract 0.4.0.
+
+**Counterfactual.** `(race, car, from_lap, plan)` returns the distributions of the actual and the
+alternative plan under common random numbers, plus the paired difference:
+- share of runs ahead and behind;
+- mean places gained, with its standard error.
+
+A plan that breaks a rule gets the real consequence: a disqualification. Every other car keeps
+its actual plan (ADR-004). The car's own plan is open loop too: it cannot react to a sampled
+safety car.
+
+**Objectives:**
+- expected position;
+- P(podium);
+- P(points). Points places come from `config/regulations.yaml` (`points_places`, sourced).
+- P(beat car X).
+
+Podium and points count only classified results. Simulation outcomes now carry the 90 %
+classification flag.
+
+**Candidates:**
+- 0–3 stops in all: 1–3 stops cover 94 % of dry-race finishers. More are reactive.
+- Every planned stint, the last included, is at least 5 laps: the 5th percentile of final stints in
+  dry races. Shorter stints are damage or safety-car stops that an open-loop plan cannot express.
+- Any of the race's allocated C-numbers, on a new set. Which sets a driver really had left is not
+  in the data, so this is optimistic for sets.
+- Only plans that satisfy the race's rules.
+- Pit laps are one lap apart while the plans fit in 1,500. Fewer stops come first, and the next
+  stop count spreads its pit laps until it fits. In practice, 3-stop plans are coarse.
+
+**Optimiser:** successive halving under common random numbers:
+- 16 runs for every candidate;
+- each round keeps the best third (never fewer than 5) and triples the runs, up to 2,000;
+- ties on the objective are broken on expected position;
+- finalists and the actual plan are then scored together on the same 2,000 runs.
+
+The test builds a race whose best plan is known by hand: two identical cars that never meet, and
+fixed stop times. The optimiser finds that plan under both "beat car X" and expected position,
+with fewer runs than brute force.
+
+**Tyre warm-up** (`make fit-warmup`, `pitwall.models.warmup`). The plan moved this term here.
+- It is per era, C-number and lap of the stint (1–4), measured against the degradation fit:
+  - **Out-lap:** green out-laps only, centred on the race's median out-lap. The pit loss already
+    holds the average out-lap and the pit-exit time, which is per track.
+  - **Stint laps 2–4:** clean-lap residuals.
+- A cell with fewer than 40 laps is 0.
+- 200 bootstrap resamples of races serve as draws.
+- It is fitted on every race, the simulated race included: the pace softening.
+- The engine adds it on green laps.
+
+| Era | Cell | Laps | Median (5–95 %) |
+|---|---|---|---|
+| 2023–25 | C5 out-lap | 88 | +0.64 s (0.31–1.22) |
+| 2023–25 | C1 out-lap | 238 | +0.16 s (0.07–0.24) |
+| 2023–25 | C2 out-lap / laps 2 / 3 | 290 / 210 / 191 | −0.14 / −0.21 / −0.12 s |
+| 2026 | C4 stint laps 2 / 3 / 4 | 91 / 101 / 106 | +0.24 / +0.19 / +0.17 s |
+| 2026 | C5 stint laps 3 / 4 | 73 / 69 | +0.13 / +0.21 s |
+
+Every other cell is within ±0.1 s. The calibration barely moves with the term in the engine (log
+score −1.931 vs −1.930, coverage 0.484 / 0.784), and the gate passed. A schema bump no longer
+loses the gate's comparison: it reads only the accepted overall score.
+
+**Undercut / overcut** (`make undercut-check`). Attacker and defender stop on consecutive laps;
+everyone else keeps their plan. The answer, P(attacker ahead), is read when the second car has
+finished its out-lap. The engine charges the whole pit loss on the in-lap, so the out-lap adds
+only the new set's pace and warm-up. The result also exposes its components:
+- the gap;
+- the pace delta;
+- the tyre delta on the attacker's out-lap;
+- the green pit loss (10 / 50 / 90 %);
+- the warm-up of both new sets.
+
+Out-of-sample check: every real pair of cars adjacent within 3 s, stopping on consecutive green
+laps (181 pairs in 75 races). Predicted with the events as they happened, against the real order
+after both out-laps:
+
+| Pairs | n | Worked | Brier (module) | Brier (base rate from the other races) |
+|---|---|---|---|---|
+| Undercut (car behind stops first) | 109 | 36 % | **0.211** | 0.235 |
+| Overcut (car ahead stops first) | 72 | 19 % | **0.146** | 0.161 |
+| All | 181 | 29 % | **0.185** | 0.205 |
+
+| Predicted | n | Mean predicted | Observed |
+|---|---|---|---|
+| 0–0.2 | 67 | 0.12 | 0.10 |
+| 0.2–0.4 | 53 | 0.29 | 0.28 |
+| 0.4–0.6 | 36 | 0.51 | 0.50 |
+| 0.6–0.8 | 21 | 0.70 | 0.48 |
+| 0.8–1.0 | 4 | 0.85 | 0.75 |
+
+- It is calibrated up to 0.6, and overconfident above it on few pairs.
+- Without the warm-up term the Brier score is 0.187 instead of 0.185. The term is real but small.
+- Pace is fitted on the race itself, so this check is out of sample for the decision, not for pace.
+
+**Debrief** (`make debrief RACES=… DRIVERS=…`). Each actual stop is judged from the race state at
+the end of the lap before its in-lap, ex ante and ex post separately. Each mode reports two
+numbers, both measured on 1,000 runs the searches never saw:
+- **stop regret:** the best plan found, against the best plan that makes this stop (same lap, same
+  set) and plays the rest well. It charges the decision only.
+- **plan regret:** the whole actual plan from that lap, later stops included.
+
+The searches always include the actual plan, and every plan that makes the actual stop and then
+continues from the real race state after it. So a stop outside the candidate grid is still found,
+such as a 3-lap stint ended by a free red-flag tyre change. The first version charged each
+decision with the later ones and missed off-grid stops, which gave negative regrets. Tests cover
+both.
+
+A sample of 44 decisions by the top five of six races:
+
+| Decision | Ex ante: stop / plan regret | Ex post: stop / plan regret | Reading |
+|---|---|---|---|
+| Monza 2026, RUS / NOR / PIA stop on lap 3 under the red flag | 0.09 / 0.52 / 0.91 | 0.00 | Right in hindsight, unknowable before it |
+| Silverstone 2026, LEC lap 25, then lap 48 under the SC | 0.01 / 1.13 | 0.00 / 0.38 | The first stop was right; the cost is the later stop |
+| Silverstone 2026, NOR / HAM late stop under the SC | 1.02 / 0.73 | 1.11 / 1.23 | A 2026 SC stop is barely cheaper (×0.94) |
+| Monza 2024, PIA second stop, lap 38 | 1.05 | 1.31 | Best was no second stop, as Leclerc won |
+| Monza 2025, VER lap 37 | 0.00 | 0.00 | — |
+| Monza 2023 / 2024, every top-five first stop | 0.28 – 0.76 | 0.40 – 0.88 | Best is 6–12 laps later |
+
+**The debrief prefers later stops, systematically.** In almost every first-stop decision of the
+sample the best plan stops later than the team did. Two causes are known:
+- Opponents are open loop (ADR-004). An early stop that covers a rival's undercut is worth
+  nothing when the rival cannot undercut.
+- Wear is linear with no cliff (Phase 3). Long stints cost nothing extra at the end.
+
+Until one of these changes, the debrief's "stop later" verdicts on first stops are not evidence of
+a mistake. The UI must say so next to them.
+
+**Speed** (one thread, Node, Apple silicon):
+- A full search from lap 1 covers about 1,200–1,350 candidates and 86–95k simulated races, in
+  3.5–4.1 s. The worker pool (`hardwareConcurrency − 1`) divides that.
+- One debrief decision runs four searches plus the holdout runs: 1–18 s, about 8.5 s on average.
+- A whole field's debrief (about 40 decisions) belongs in the weekend pipeline (Phase 11), not in
+  the browser.
+
+**Open for decisions:**
+- reactive stops under a safety car, for the target car and for rivals (ADR-004);
+- a wear cliff (Phase 3).
+
+Both would change the debrief's main bias.
 
 ---
 

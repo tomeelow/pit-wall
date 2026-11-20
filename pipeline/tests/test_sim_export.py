@@ -65,6 +65,13 @@ def write_models(folder: Path, tables: RaceTables, drivers: tuple[str, ...]) -> 
         }
     )
     traffic.to_parquet(folder / "traffic_draws.parquet", index=False)
+    warm = [
+        {"draw": d, "compound_c": c, "stint_lap": k, "warmup_s": 0.1 * c / k}
+        for d in range(DRAWS)
+        for c in (1, 2, 3)
+        for k in (1, 2)
+    ]
+    pd.DataFrame(warm).to_parquet(folder / "warmup_draws.parquet", index=False)
     dirty_air = [{"gap_upto_s": 0.5, "loss_s": 0.4}]
     (folder / "traffic.json").write_text(
         json.dumps({"max_gap_s": 3.0, "drs_gap_s": 1.0, "dirty_air": dirty_air})
@@ -120,6 +127,11 @@ def test_race_carries_its_rules_and_realised_events(
     assert [(n.kind, n.start_lap, n.end_lap) for n in sim.realised] == [("SC", 31, 33)]
     assert [p.kind for p in sim.neutralisations] == ["SC", "VSC", "RED"]
     assert sim.neutralisations[2].lap_factor == 1.45  # a red flag runs like a safety car
+    assert [w[1][0] for w in sim.degradation.warmup_s] == [0.05, 0.1, 0.15]  # C1-C3, stint lap 2
+    clean = race_tables.laps[race_tables.laps["lap_class"] == "clean"]
+    assert sim.degradation.race_clean_laps == [
+        int((clean["compound_c"] == c).sum()) for c in (1, 2, 3)
+    ]
     assert REGULATIONS.rules(2025, 8).min_stops == 2  # Monaco 2025
     assert REGULATIONS.rules(2024, 8).min_stops == 0
 

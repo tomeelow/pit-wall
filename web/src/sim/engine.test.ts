@@ -255,6 +255,19 @@ describe("mechanics", () => {
     expect(time(underRed, [sameSet]) - time(underRed, [[]])).toBeCloseTo(0, 6);
   });
 
+  it("adds warm-up on the first green laps of a stint", () => {
+    const race = syntheticRace({ cars: 1, laps: 12, eventRate: 0, dnfRate: 0, warmupS: [0.8, 0.3] });
+    const sameSet = [{ lap: 6, compound_c: 2, tyre_age: 6 }];
+    const time = (r: SimRace, strategies: Strategy[]) =>
+      simulate(r, { strategies, mode: REPLAY }).ws.time[0]!;
+    const median = [...race.pit_loss.stationary_s].sort((a, b) => a - b)[3]!;
+    const stop = race.pit_loss.transit_s + median;
+    expect(time(race, [sameSet]) - time(race, [[]])).toBeCloseTo(stop + 0.8 + 0.3, 6);
+    // Under a safety car on the out-lap only the second stint lap's warm-up counts.
+    const scOutLap = { ...race, realised: [{ kind: "SC" as const, start_lap: 7, end_lap: 7 }] };
+    expect(time(scOutLap, [sameSet]) - time(scOutLap, [[]])).toBeCloseTo(stop + 0.3, 6);
+  });
+
   it("closes the field up behind a safety car", () => {
     const race = syntheticRace({
       laps: 5,

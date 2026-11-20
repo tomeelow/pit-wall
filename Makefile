@@ -1,4 +1,4 @@
-.PHONY: setup verify verify-pipeline verify-web bench replay validate-sim contract contract-check ingest fit backtest fit-events validate-events fit-traffic validate-traffic export build dev
+.PHONY: setup verify verify-pipeline verify-web bench replay validate-sim undercut-check debrief contract contract-check ingest fit backtest fit-events validate-events fit-traffic validate-traffic fit-warmup export build dev
 
 PY := cd pipeline && uv run --frozen
 WEB := cd web && npm run -s
@@ -36,6 +36,18 @@ replay:
 # Run `make export` before (sim inputs) and after (to publish the accepted calibration).
 validate-sim:
 	$(PY) pitwall validate-sim
+
+# The undercut module against every green pair of adjacent cars that stopped on consecutive laps
+# (needs `make export`). Settings from config/pipeline.yaml (sim_validation).
+undercut-check:
+	@args=$$($(PY) python -c "import yaml; v = yaml.safe_load(open('../config/pipeline.yaml'))['sim_validation']; print(v['undercut_runs'], v['seed'], ','.join(map(str, v['undercut_bins'])))") && \
+	cd web && $(NODE) scripts/undercut.ts public/data $$args
+
+# Strategy debrief of the first DRIVERS finishers of RACES, e.g. RACES=2025-16,2026-09 DRIVERS=5
+# (needs `make export`).
+debrief:
+	@seed=$$($(PY) python -c "import yaml; print(yaml.safe_load(open('../config/pipeline.yaml'))['sim_validation']['seed'])") && \
+	cd web && $(NODE) scripts/debrief.ts public/data $$seed $(RACES) $(or $(DRIVERS),3)
 
 # Regenerate JSON Schema and TypeScript types after editing pipeline/src/pitwall/export/contract.py.
 contract:
@@ -76,6 +88,10 @@ validate-events:
 # Dirty air and the pass model. Needs `make fit` first: pace comes from the degradation draws.
 fit-traffic:
 	$(PY) pitwall fit-traffic
+
+# Tyre warm-up per C-number and stint lap, from the degradation fit's residuals.
+fit-warmup:
+	$(PY) pitwall fit-warmup
 
 # Leave-one-season-out validation of the pass model, with a reliability table.
 validate-traffic:

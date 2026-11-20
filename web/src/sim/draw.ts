@@ -10,6 +10,7 @@ export interface Draw {
   pace: Float64Array; // per car
   slope: Float64Array; // per car x compound
   offset: Float64Array; // per compound
+  warmup: Float64Array; // per compound x stint lap (0 is the out-lap)
   dnfRate: Float64Array; // per car, per lap
   eventRate: Float64Array; // per kind, per green lap
   intercept: number;
@@ -26,6 +27,7 @@ export function createDraw(prepared: Prepared): Draw {
     pace: new Float64Array(prepared.cars),
     slope: new Float64Array(prepared.cars * prepared.compounds),
     offset: new Float64Array(prepared.compounds),
+    warmup: new Float64Array(prepared.compounds * prepared.warmupLaps),
     dnfRate: new Float64Array(prepared.cars),
     eventRate: new Float64Array(KINDS.length),
     intercept: 0,
@@ -44,6 +46,10 @@ export function fillDraw(race: SimRace, d: number | "mean", out: Draw): void {
   out.nu = at(deg.nu);
   const k = race.compounds.length;
   race.compounds.forEach((_, c) => (out.offset[c] = at(deg.offset_s[c]!)));
+  const w = out.warmup.length / k;
+  for (let c = 0; c < k; c++) {
+    for (let j = 0; j < w; j++) out.warmup[c * w + j] = at(deg.warmup_s[c]![j]!);
+  }
   race.cars.forEach((car, i) => {
     out.pace[i] = at(car.pace_s);
     out.dnfRate[i] = at(car.dnf_rate_per_lap);

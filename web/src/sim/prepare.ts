@@ -17,6 +17,7 @@ export interface Prepared {
   laps: number; // total race laps
   fromLap: number; // simulations start after this lap
   compounds: number; // count; per-compound arrays follow race.compounds
+  warmupLaps: number; // stint laps with a warm-up term, from the out-lap
   compoundIndex: Map<number, number>; // C-number → index
   // Start state, per car. A retired car has alive 0.
   time: Float64Array;
@@ -98,6 +99,7 @@ export function prepare(race: SimRace, fromLap: number): Prepared {
     laps: race.total_laps,
     fromLap,
     compounds: race.compounds.length,
+    warmupLaps: race.degradation.warmup_s[0]?.length ?? 0,
     compoundIndex,
     time,
     compound,

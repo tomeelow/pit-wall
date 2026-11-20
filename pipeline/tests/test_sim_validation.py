@@ -1,3 +1,4 @@
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -136,7 +137,7 @@ def test_gate_requires_beating_the_running_order_from_mid_race() -> None:
 
 def test_gate_rejects_regressions_against_the_accepted_calibration() -> None:
     rows = scored_rows(-2.0, -2.5)
-    before = accepted(-1.90, 0.50)
+    before = accepted(-1.90, 0.50).segments[0]
     worse_score = accepted(-1.95, 0.50).segments[0]
     assert not simulator.gate(rows, worse_score, before, GATE).passed
     worse_coverage = accepted(-1.90, 0.42).segments[0]
@@ -144,6 +145,14 @@ def test_gate_rejects_regressions_against_the_accepted_calibration() -> None:
     assert not result.passed and "50% coverage" in result.reasons[0]
     small_change = accepted(-1.91, 0.48).segments[0]
     assert simulator.gate(rows, small_change, before, GATE).passed
+
+
+def test_the_gate_reads_the_accepted_score_across_contract_versions(tmp_path: Path) -> None:
+    assert simulator.accepted_overall(tmp_path / "none.json") is None
+    old = json.loads(accepted(-1.9, 0.5).model_dump_json()) | {"schema_version": "0.1.0"}
+    path = tmp_path / "calibration.json"
+    path.write_text(json.dumps(old))
+    assert simulator.accepted_overall(path) == accepted(-1.9, 0.5).segments[0]
 
 
 def test_bundle_publishes_only_a_calibration_that_matches_the_contract(

@@ -38,6 +38,7 @@ MODEL_FILES = (
     "events.json",
     "traffic_draws.parquet",
     "traffic.json",
+    "warmup_draws.parquet",
 )
 WET = ("INTERMEDIATE", "WET")
 
@@ -145,6 +146,9 @@ def build_sim(
     traffic_draws = pd.read_parquet(path / "traffic_draws.parquet")
     traffic_draws = traffic_draws[traffic_draws["draw"] < n]
     traffic = json.loads((path / "traffic.json").read_text())
+    warm = pd.read_parquet(path / "warmup_draws.parquet")
+    warm = warm[warm["draw"] < n]
+    stint_laps = sorted(int(k) for k in warm["stint_lap"].unique())
 
     def per_draw(frame: pd.DataFrame, column: str) -> list[float]:
         return _per_draw(frame, column, n, decimals)
@@ -152,6 +156,7 @@ def build_sim(
     def rate(kind: str, unit: str) -> list[float]:
         return per_draw(hazard[(hazard["kind"] == kind) & (hazard["unit"] == unit)], "rate")
 
+    clean = laps[laps["lap_class"] == "clean"].groupby("compound_c").size()
     shared = deg.groupby("draw", as_index=False).first()
     one_driver = deg[deg["driver"] == deg["driver"].iloc[0]]
     field_pace = deg.groupby(["draw", "driver"])["pace_s"].first().groupby("draw").median()
@@ -218,6 +223,14 @@ def build_sim(
             offset_s=[
                 per_draw(one_driver[one_driver["compound_c"] == c], "offset_s") for c in compounds
             ],
+            warmup_s=[
+                [
+                    per_draw(warm[(warm["compound_c"] == c) & (warm["stint_lap"] == k)], "warmup_s")
+                    for k in stint_laps
+                ]
+                for c in compounds
+            ],
+            race_clean_laps=[int(clean.get(c, 0)) for c in compounds],
         ),
         pit_loss=PitLoss(
             transit_s=events["pit_transit_s"],

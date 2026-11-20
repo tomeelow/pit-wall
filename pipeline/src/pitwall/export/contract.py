@@ -12,8 +12,8 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 from pydantic.json_schema import GenerateJsonSchema
 
-SchemaVersion = Literal["0.3.0"]
-SCHEMA_VERSION: SchemaVersion = "0.3.0"
+SchemaVersion = Literal["0.4.0"]
+SCHEMA_VERSION: SchemaVersion = "0.4.0"
 
 Compound = Literal["SOFT", "MEDIUM", "HARD", "INTERMEDIATE", "WET", "UNKNOWN"]
 
@@ -58,12 +58,27 @@ class RaceEntry(_Contract):
     dataset_version: str
 
 
+class StrategySettings(_Contract):
+    """Strategy search: candidate plans for one car and successive halving over them."""
+
+    max_stops: int
+    min_stint_laps: int  # every planned stint
+    max_candidates: int  # pit laps spread out until the candidates fit
+    min_race_clean_laps: int  # a C-number with fewer in the race is not proposed
+    first_runs: int
+    eta: int  # each round keeps the best 1/eta and gives them eta times the runs
+    keep: int  # candidates reported, and the fewest a round keeps
+    max_runs: int
+    holdout_runs: int  # fresh runs on which the debrief scores the chosen strategy
+
+
 class Manifest(_Contract):
     schema_version: SchemaVersion
     git_sha: str
     generated_at: datetime
     races: list[RaceEntry]
     calibration_path: str | None  # None until the simulator has been validated
+    strategy: StrategySettings
 
 
 # Simulator inputs (Phase 6). Every list named per draw has SimRace.draws entries, and draw i of
@@ -82,6 +97,7 @@ class Rules(_Contract):
     max_stint_laps: int | None
     red_flag_free_tyre_change: bool
     classified_fraction: float
+    points_places: int
 
 
 class Mechanics(_Contract):
@@ -92,6 +108,7 @@ class Mechanics(_Contract):
 class Degradation(_Contract):
     """Free-air lap time = race_median_s + pace_s[car] + offset_s[compound]
     + slope_s_per_lap[car][compound] * tyre_age + fuel_s_per_kg * fuel_kg(lap)
+    + warmup_s[compound][k] on the k-th green lap of a stint (k = 0 is the out-lap)
     + StudentT(nu, 0, noise_sd_s), where fuel_kg(lap) = race_fuel_kg * (1 - (lap - 0.5) / laps)
     and tyre_age counts the lap being driven."""
 
@@ -101,6 +118,9 @@ class Degradation(_Contract):
     nu: list[float]  # per draw
     noise_sd_s: list[float]  # per draw
     offset_s: list[list[float]]  # per compound, per draw
+    warmup_s: list[list[list[float]]]  # per compound, per stint lap, per draw
+    # Per compound: the race's own evidence. Few laps mean pace and wear come from other races.
+    race_clean_laps: list[int]
 
 
 class PitLoss(_Contract):

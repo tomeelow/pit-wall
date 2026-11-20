@@ -22,3 +22,26 @@ export { mergeOutcomes, runSimulations, type Outcome, type Query } from "./monte
 export { actualStrategies, compilePlan, prepare, type Prepared, type Strategy } from "./prepare.ts";
 export { Rng } from "./rng.ts";
 export { finishCounts, startLaps } from "./backtest.ts";
+export { candidates } from "./candidates.ts";
+export { debrief, EX_ANTE, EX_POST, type Decision, type Verdict } from "./debrief.ts";
+export { optimise, type Ranked, type Search, type SearchResult } from "./optimise.ts";
+export {
+  counterfactual,
+  distribution,
+  inProcess,
+  paired,
+  score,
+  withStrategy,
+  type Comparison,
+  type CounterfactualQuery,
+  type Distribution,
+  type Evaluate,
+  type Objective,
+  type Paired,
+} from "./strategy.ts";
+export {
+  undercut,
+  type UndercutComponents,
+  type UndercutQuery,
+  type UndercutResult,
+} from "./undercut.ts";

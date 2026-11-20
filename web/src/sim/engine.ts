@@ -94,7 +94,7 @@ export function simulateRace(
   ws: Workspace,
   trace?: Trace,
 ): void {
-  const { race, cars: n, laps: total, compounds: k } = prepared;
+  const { race, cars: n, laps: total, compounds: k, warmupLaps } = prepared;
   const { traffic, mechanics, degradation: deg, rules } = race;
   const sampled = mode.events === "sampled";
   const stride = total + 1;
@@ -175,9 +175,12 @@ export function simulateRace(
         draw.slope[i * k + c]! * (ws.age[i]! + 1) +
         fuel;
       ws.predicted[i] = base;
+      // Warm-up is measured on green laps only; under a neutralisation every lap is slow anyway.
+      const stintLap = ws.stintLaps[i]!;
+      const warmup = stintLap < warmupLaps ? draw.warmup[c * warmupLaps + stintLap]! : 0;
       let lapTime =
         kind === GREEN
-          ? base + (mode.noise ? draw.noiseSd * random.lapNoise[cell]! : 0)
+          ? base + warmup + (mode.noise ? draw.noiseSd * random.lapNoise[cell]! : 0)
           : base * prepared.lapFactor[kind]!;
       const s = ws.nextStop[i]!;
       if (s < plan.offset[i + 1]! && plan.lap[s] === lap) {
