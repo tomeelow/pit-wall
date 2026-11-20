@@ -1,0 +1,78 @@
+name: weekend
+
+# After a race weekend: ingest the new race, pull the previous one again (amended results), refit,
+# apply every gate, publish to GitHub Releases and redeploy (ADR-008). Every step runs locally as
+# `make data-pull` then `make weekend PUBLISH=1`.
+on:
+  schedule:
+    - cron: "0 6 * * 1"  # Monday 06:00 UTC, after race weekends; a no-op otherwise
+    - cron: "0 6 * * 3"  # Wednesday: catches classifications amended by late penalties
+  workflow_dispatch:
+    inputs:
+      season:
+        description: Season (default the current year)
+        required: false
+      round:
+        description: Pull this round (again) instead of reading the calendar
+        required: false
+
+concurrency:
+  group: weekend
+  cancel-in-progress: false
+
+jobs:
+  weekend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    permissions:
+      contents: write  # release assets
+    outputs:
+      published: ${{ steps.run.outputs.published }}
+      problems: ${{ steps.run.outputs.problems }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3  # publishes no floating major tag
+        with:
+          enable-cache: true
+          cache-dependency-glob: pipeline/uv.lock
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      # Raw OpenF1 responses: a finished session is downloaded once, not on every run.
+      - uses: actions/cache@v6
+        with:
+          path: .data/openf1-cache.sqlite
+          key: openf1-cache-v1-${{ github.run_id }}
+          restore-keys: openf1-cache-v1-
+      - run: make setup
+      - run: make data-pull
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - id: run
+        run: make weekend PUBLISH=1 SEASON="${{ inputs.season }}" ROUND="${{ inputs.round }}"
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - if: always()
+        run: cat .data/weekend.md >> "$GITHUB_STEP_SUMMARY" || true
+
+  deploy:
+    needs: weekend
+    if: needs.weekend.outputs.published == 'true'
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/deploy.yml
+
+  # A failed gate or a race that did not validate still publishes what it can, then fails here so
+  # that GitHub reports it.
+  report:
+    needs: [weekend, deploy]
+    if: always() && needs.weekend.outputs.problems == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "A gate failed or a race did not validate: see the weekend job summary."
+          exit 1

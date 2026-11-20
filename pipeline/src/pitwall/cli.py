@@ -2,13 +2,17 @@ import argparse
 import os
 import subprocess
 import sys
+import tempfile
+from collections.abc import Callable
 from datetime import UTC, datetime
+from functools import partial
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 from loguru import logger
 
+from pitwall import store, weekend
 from pitwall.config import (
     REPO_ROOT,
     PipelineConfig,
@@ -20,7 +24,7 @@ from pitwall.config import (
     load_thresholds,
 )
 from pitwall.export.bundle import export_bundle
-from pitwall.export.contract import Manifest, SimRace, write_schemas
+from pitwall.export.contract import Manifest, SegmentScore, SimRace, write_schemas
 from pitwall.ingest.openf1 import OpenF1, fetch_race, finished_rounds
 from pitwall.ingest.storage import (
     RaceTables,
@@ -51,25 +55,21 @@ def _git_sha() -> str:
     return result.stdout.strip() or "unknown"
 
 
-def _openf1(config: PipelineConfig) -> OpenF1:
+def _openf1(config: PipelineConfig, refresh: bool = False) -> OpenF1:
     return OpenF1(
         config.openf1_url,
         config.data_dir / "openf1-cache.sqlite",
         config.calendar_cache_hours,
         config.openf1_min_interval_s,
+        refresh,
     )
 
 
-def ingest(config: PipelineConfig, season: int, round_: int | None) -> bool:
-    """Ingest one race, or every finished race of the season. True if every race validated."""
-    client = _openf1(config)
+def ingest_rounds(
+    config: PipelineConfig, client: OpenF1, season: int, rounds: list[int]
+) -> list[RaceReport]:
+    """Pull, validate and store these rounds; a race that fails validation is not written."""
     team_ids, allocations = load_team_ids(), load_allocations()
-    rounds = (
-        [round_]
-        if round_ is not None
-        else finished_rounds(client, season, datetime.now(UTC), config.min_hours_after_race)
-    )
-
     reports: list[RaceReport] = []
     for r in rounds:
         allocation = allocations.get((season, r))
@@ -98,16 +98,27 @@ def ingest(config: PipelineConfig, season: int, round_: int | None) -> bool:
             report.position_agreement,
             len(report.warnings),
         )
+    if reports:
+        write_summary(season_dir(config.data_dir, season), reports)
+    return reports
 
-    summary = write_summary(season_dir(config.data_dir, season), reports)
+
+def ingest(config: PipelineConfig, season: int, round_: int | None) -> bool:
+    """Ingest one race, or every finished race of the season. True if every race validated."""
+    client = _openf1(config)
+    rounds = (
+        [round_]
+        if round_ is not None
+        else finished_rounds(client, season, datetime.now(UTC), config.min_hours_after_race)
+    )
+    reports = ingest_rounds(config, client, season, rounds)
     failed = [r for r in reports if r.errors]
     logger.info(
-        "{}: {} races ingested, {} rejected, {} warnings; summary at {}",
+        "{}: {} races ingested, {} rejected, {} warnings",
         season,
         len(reports) - len(failed),
         len(failed),
         sum(len(r.warnings) for r in reports),
-        summary,
     )
     return not failed
 
@@ -525,6 +536,117 @@ def validate_sim(config: PipelineConfig) -> bool:
     return report.gate.passed
 
 
+def export(config: PipelineConfig) -> Manifest:
+    return export_bundle(
+        config.data_dir,
+        config.bundle_dir,
+        _git_sha(),
+        config.sim,
+        load_regulations(),
+        load_budgets().bundle,
+    )
+
+
+def _overall(config: PipelineConfig) -> SegmentScore | None:
+    return simulator.accepted_overall(_model_dir(config, "sim") / "calibration.json")
+
+
+def _outcome(report: RaceReport, status: str) -> weekend.RaceOutcome:
+    return weekend.RaceOutcome(
+        season=report.season,
+        round=report.round,
+        name=report.name,
+        status="rejected" if report.errors else status,
+        laps=report.lap_rows,
+        clean=report.lap_classes.get("clean", 0),
+        warnings=len(report.warnings),
+    )
+
+
+def run_weekend(
+    config: PipelineConfig, season: int, round_: int | None, publish: bool
+) -> tuple[bool, bool]:
+    """Ingest the season's new races and pull the last stored one again; if anything changed,
+    refit every model, validate, export and (with publish) upload to the store. Any failed gate
+    puts the previous parameters back: the new races' descriptive data still publishes. Returns
+    (published, problems): problems is a failed gate or a race that did not validate."""
+    client = _openf1(config)
+    stored = [int(p.name) for p in list_races(config.data_dir) if p.parent.name == str(season)]
+    finished = (
+        []
+        if round_ is not None
+        else finished_rounds(client, season, datetime.now(UTC), config.min_hours_after_race)
+    )
+    new, again = weekend.plan_rounds(finished, stored, round_)
+    logger.info("{}: new rounds {}, pulled again {}", season, new, again)
+
+    def fingerprint(round_: int) -> str:
+        return read_race(race_dir(config.data_dir, season, round_)).fingerprint()
+
+    before = {r: fingerprint(r) for r in again}
+    outcomes = [_outcome(rep, "new") for rep in ingest_rounds(config, client, season, new)]
+    for rep in ingest_rounds(config, _openf1(config, refresh=True), season, again):
+        same = fingerprint(rep.round) == before[rep.round]
+        outcomes.append(_outcome(rep, "unchanged" if same else "amended"))
+    changed = [(o.season, o.round) for o in outcomes if o.status in ("new", "amended")]
+    problems = any(o.status == "rejected" for o in outcomes)
+    gates: dict[str, bool] = {}
+    previous = _overall(config)
+    published = "Nothing changed: nothing published."
+    if changed:
+        regulations = load_regulations()
+        with tempfile.TemporaryDirectory() as tmp:
+            weekend.snapshot(config.data_dir, Path(tmp))
+            eras = sorted({regulations.era_of(s).name for s, _ in changed})
+            fits: list[tuple[str, Callable[[], bool]]] = [
+                *((f"degradation {era}", partial(fit_degradation, config, era)) for era in eras),
+                ("events", partial(fit_events, config)),
+                ("traffic", partial(fit_traffic, config)),
+            ]
+            # Later fits build on earlier ones: once a gate fails, the rest would be wasted.
+            for name, fit in fits:
+                gates[name] = fit()
+                if not gates[name]:
+                    break
+            else:
+                fit_warmup(config)
+                export(config)
+                gates["simulator calibration"] = validate_sim(config)
+            refreshed = all(gates.values())
+            if not refreshed:
+                weekend.restore(config.data_dir, Path(tmp))
+                logger.error("a gate failed: the previous model parameters stay live")
+        export(config)
+        problems = problems or not refreshed
+        everything = [(int(p.parent.name), int(p.name)) for p in list_races(config.data_dir)]
+        if publish:
+            store.push(config.data_dir, everything if refreshed else changed, models=refreshed)
+        published = f"{'Published' if publish else 'Not published (dry run)'}: " + (
+            "models refreshed, every race."
+            if refreshed
+            else f"models NOT refreshed (previous parameters live); races {changed}."
+        )
+
+    summary = weekend.report(
+        outcomes,
+        gates,
+        previous,
+        _overall(config) if changed else None,
+        weekend.largest_files(config.bundle_dir) if changed else {},
+        published,
+    )
+    (config.data_dir / "weekend.md").write_text(summary)
+    logger.info("\n{}", summary)
+    return bool(changed) and publish, problems
+
+
+def _github_outputs(published: bool, problems: bool) -> None:
+    """Step outputs and the job summary, when running on GitHub Actions."""
+    if out := os.environ.get("GITHUB_OUTPUT"):
+        with open(out, "a") as f:
+            f.write(f"published={str(published).lower()}\nproblems={str(problems).lower()}\n")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="pitwall")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -571,6 +693,19 @@ def main() -> None:
     )
     commands.add_parser("export", help="write the static bundle from all ingested races")
 
+    weekend_cmd = commands.add_parser(
+        "weekend", help="ingest new races, pull the last one again, refit, validate and export"
+    )
+    weekend_cmd.add_argument("--season", type=int, help="default: the current year")
+    weekend_cmd.add_argument("--round", type=int, help="pull this round (again), not the calendar")
+    weekend_cmd.add_argument(
+        "--publish", action="store_true", help="upload what changed to the GitHub Releases store"
+    )
+    commands.add_parser("data-pull", help="download the published races and models (ADR-008)")
+    commands.add_parser(
+        "data-push", help="upload every stored race and the models to the store (seeding)"
+    )
+
     contract = commands.add_parser("contract", help="write JSON Schema for the export contract")
     contract.add_argument("--out", type=Path, required=True)
 
@@ -605,14 +740,17 @@ def main() -> None:
             if not validate_sim(config):
                 sys.exit(1)
         case "export":
-            export_bundle(
-                config.data_dir,
-                config.bundle_dir,
-                _git_sha(),
-                config.sim,
-                load_regulations(),
-                load_budgets().bundle,
+            export(config)
+        case "weekend":
+            published, problems = run_weekend(
+                config, args.season or datetime.now(UTC).year, args.round, args.publish
             )
+            _github_outputs(published, problems)
+        case "data-pull":
+            store.pull(config.data_dir)
+        case "data-push":
+            races = [(int(p.parent.name), int(p.name)) for p in list_races(config.data_dir)]
+            store.push(config.data_dir, races, models=True)
         case "contract":
             for path in write_schemas(args.out):
                 logger.info("wrote {}", path)

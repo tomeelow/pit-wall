@@ -1,6 +1,6 @@
 # ADR-003: Static bundle on GitHub Pages, durable storage in GitHub Releases
 
-**Status:** accepted
+**Status:** accepted; the release contents are amended by ADR-008 (pipeline data, not bundles).
 
 ## Context
 Running cost must be zero and there is no server. The site needs the web app plus a growing

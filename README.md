@@ -62,6 +62,26 @@ fills them in for races stored earlier. `make export` fails if a file is over th
 
 The deploy workflow needs GitHub Pages set to deploy from GitHub Actions.
 
+### Publishing
+
+The published races and models live in GitHub Releases ([ADR-008](docs/adr/008-releases-store-pipeline-data.md)):
+one `data-<season>` release per season and a `models` release. `make data-pull` downloads them into
+`.data` (it needs the `gh` CLI), and every deploy rebuilds the site from them. After a race weekend
+the `weekend` workflow (Mondays, and Wednesdays for amended results) runs the same steps you can
+run locally:
+
+```bash
+make data-pull
+```
+
+```bash
+make weekend PUBLISH=1
+```
+
+It ingests the season's new races, pulls the previous race again, refits every model and applies
+every gate. If a gate fails, the previous parameters stay live and the new race publishes without a
+simulation. Without `PUBLISH=1` nothing is uploaded; the run's summary is in `.data/weekend.md`.
+
 ## Simulator calibration
 
 `make validate-sim` (after `make export`) backtests the simulator. It covers every simulable race,

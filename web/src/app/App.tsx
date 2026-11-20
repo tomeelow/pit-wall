@@ -129,8 +129,9 @@ function Lab({ manifest }: { manifest: Manifest }) {
     if (sim.status === "none") {
       return (
         <Empty title="No simulation for this race">
-          The race view works for every race; the strategy tools need a simulation bundle, which this race
-          does not have yet.
+          The strategy tools need this race&rsquo;s model parameters, and it has none: it cannot be simulated
+          (a wet race, or missing timing), or it is new and the model has not been refreshed with it yet. Race,
+          replay and telemetry still work.
         </Empty>
       );
     }
