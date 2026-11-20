@@ -198,10 +198,18 @@ def pit_histogram(scored: pd.DataFrame, bins: int) -> list[float]:
     return [round(float(c), 4) for c in counts / counts.sum()]
 
 
+def accepted_overall(path: Path) -> SegmentScore | None:
+    """The overall score of the accepted calibration, read on its own: a contract bump elsewhere
+    must not lose the comparison. A change to the score's own shape raises."""
+    if not path.exists():
+        return None
+    return SegmentScore.model_validate(json.loads(path.read_text())["segments"][0])
+
+
 def gate(
     scored: pd.DataFrame,
     overall: SegmentScore,
-    accepted: Calibration | None,
+    accepted: SegmentScore | None,
     thresholds: SimulatorGate,
 ) -> GateResult:
     reasons = []
@@ -214,7 +222,7 @@ def gate(
                 f"order at the start lap ({baseline:.3f})"
             )
     if accepted is not None:
-        before = accepted.segments[0]
+        before = accepted
         if overall.log_score < before.log_score - thresholds.max_log_score_regression:
             reasons.append(f"log score fell from {before.log_score} to {overall.log_score}")
         for level, now, then in (
@@ -230,7 +238,7 @@ def calibration(
     scored: pd.DataFrame,
     races: dict[tuple[int, int], SimRace],
     settings: SimValidationConfig,
-    accepted: Calibration | None,
+    accepted: SegmentScore | None,
     thresholds: SimulatorGate,
     git_sha: str,
 ) -> Calibration:

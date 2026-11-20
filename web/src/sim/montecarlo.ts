@@ -1,6 +1,6 @@
 import type { SimRace } from "../contract/sim";
 import { createDraw, createRandoms, fillDraw, fillRandoms } from "./draw.ts";
-import { createWorkspace, simulateRace, type Mode } from "./engine.ts";
+import { createWorkspace, isClassified, simulateRace, type Mode } from "./engine.ts";
 import { compilePlan, prepare, type Strategy } from "./prepare.ts";
 import { Rng } from "./rng.ts";
 
@@ -26,6 +26,7 @@ export interface Outcome {
   cars: number;
   position: Int8Array;
   status: Uint8Array;
+  classified: Uint8Array; // 1: in the official classification (finished, or retired late enough)
 }
 
 export function runSimulations(race: SimRace, query: Query, first = 0, runs = query.runs): Outcome {
@@ -42,6 +43,7 @@ export function runSimulations(race: SimRace, query: Query, first = 0, runs = qu
     cars: n,
     position: new Int8Array(plans.length * runs * n),
     status: new Uint8Array(plans.length * runs * n),
+    classified: new Uint8Array(plans.length * runs * n),
   };
   if (query.meanParameters) fillDraw(race, "mean", draw);
   for (let r = 0; r < runs; r++) {
@@ -53,6 +55,7 @@ export function runSimulations(race: SimRace, query: Query, first = 0, runs = qu
       const at = (s * runs + r) * n;
       outcome.position.set(ws.position, at);
       outcome.status.set(ws.status, at);
+      for (let i = 0; i < n; i++) outcome.classified[at + i] = isClassified(ws, i, prepared) ? 1 : 0;
     });
   }
   return outcome;
@@ -72,6 +75,7 @@ export function mergeOutcomes(chunks: readonly Outcome[]): Outcome {
     cars,
     position: new Int8Array(sets * runs * cars),
     status: new Uint8Array(sets * runs * cars),
+    classified: new Uint8Array(sets * runs * cars),
   };
   let offset = 0;
   for (const chunk of sorted) {
@@ -82,6 +86,7 @@ export function mergeOutcomes(chunks: readonly Outcome[]): Outcome {
       const size = chunk.runs * cars;
       merged.position.set(chunk.position.subarray(from, from + size), to);
       merged.status.set(chunk.status.subarray(from, from + size), to);
+      merged.classified.set(chunk.classified.subarray(from, from + size), to);
     }
     offset += chunk.runs;
   }

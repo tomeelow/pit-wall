@@ -27,8 +27,12 @@ export class SimPool {
     this.workers = Array.from({ length: size }, spawn);
   }
 
-  run(race: SimRace, query: Query): Promise<Outcome> {
-    const chunks = split(query.runs, this.workers.length);
+  /** Simulations first .. first + query.runs - 1 of the query. */
+  run(race: SimRace, query: Query, first = 0): Promise<Outcome> {
+    const chunks = split(query.runs, this.workers.length).map((c) => ({
+      ...c,
+      first: c.first + first,
+    }));
     return Promise.all(
       chunks.map(
         (chunk, k) =>

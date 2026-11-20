@@ -39,12 +39,58 @@
       ],
       "title": "RaceEntry",
       "type": "object"
+    },
+    "StrategySettings": {
+      "additionalProperties": false,
+      "description": "Strategy search: candidate plans for one car and successive halving over them.",
+      "properties": {
+        "max_stops": {
+          "type": "integer"
+        },
+        "min_stint_laps": {
+          "type": "integer"
+        },
+        "max_candidates": {
+          "type": "integer"
+        },
+        "min_race_clean_laps": {
+          "type": "integer"
+        },
+        "first_runs": {
+          "type": "integer"
+        },
+        "eta": {
+          "type": "integer"
+        },
+        "keep": {
+          "type": "integer"
+        },
+        "max_runs": {
+          "type": "integer"
+        },
+        "holdout_runs": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "max_stops",
+        "min_stint_laps",
+        "max_candidates",
+        "min_race_clean_laps",
+        "first_runs",
+        "eta",
+        "keep",
+        "max_runs",
+        "holdout_runs"
+      ],
+      "title": "StrategySettings",
+      "type": "object"
     }
   },
   "additionalProperties": false,
   "properties": {
     "schema_version": {
-      "const": "0.3.0",
+      "const": "0.4.0",
       "type": "string"
     },
     "git_sha": {
@@ -69,6 +115,9 @@
           "type": "null"
         }
       ]
+    },
+    "strategy": {
+      "$ref": "#/$defs/StrategySettings"
     }
   },
   "required": [
@@ -76,7 +125,8 @@
     "git_sha",
     "generated_at",
     "races",
-    "calibration_path"
+    "calibration_path",
+    "strategy"
   ],
   "title": "Manifest",
   "type": "object"

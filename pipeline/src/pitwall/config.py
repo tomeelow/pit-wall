@@ -112,11 +112,31 @@ class TrafficConfig(_Config):
     reliability_bins: list[float] = Field(min_length=2)
 
 
+class StrategyConfig(_Config):
+    max_stops: int = Field(ge=1)
+    min_stint_laps: int = Field(ge=1)
+    max_candidates: int = Field(ge=1)
+    min_race_clean_laps: int = Field(ge=0)
+    first_runs: int = Field(ge=1)
+    eta: int = Field(ge=2)
+    keep: int = Field(ge=1)
+    max_runs: int = Field(ge=1)
+    holdout_runs: int = Field(ge=1)
+
+
 class SimConfig(_Config):
     draws: int = Field(ge=1)
     follow_gap_s: float = Field(gt=0)
     restart_gap_s: float = Field(gt=0)
     decimals: int = Field(ge=1)
+    strategy: StrategyConfig
+
+
+class WarmupConfig(_Config):
+    stint_laps: int = Field(ge=1)
+    min_laps: int = Field(ge=1)
+    draws: int = Field(ge=1)
+    seed: int
 
 
 class SimValidationConfig(_Config):
@@ -125,6 +145,8 @@ class SimValidationConfig(_Config):
     start_fractions: list[float] = Field(min_length=1)
     smoothing: float = Field(gt=0)
     pit_bins: int = Field(ge=2)
+    undercut_runs: int = Field(ge=1)
+    undercut_bins: list[float] = Field(min_length=2)
 
 
 class SimulatorGate(_Config):
@@ -148,6 +170,7 @@ class PipelineConfig(_Config):
     degradation: DegradationConfig
     events: EventsConfig
     traffic: TrafficConfig
+    warmup: WarmupConfig
     sim: SimConfig
     sim_validation: SimValidationConfig
 
@@ -159,6 +182,7 @@ class Era(_Config):
     min_dry_compounds: int = Field(ge=1)
     red_flag_free_tyre_change: bool
     classified_fraction: float = Field(gt=0, le=1)
+    points_places: int = Field(ge=1)
 
 
 class RaceRule(_Config):
@@ -178,6 +202,7 @@ class RaceRules(_Config):
     max_stint_laps: int | None
     red_flag_free_tyre_change: bool
     classified_fraction: float
+    points_places: int
 
 
 class Regulations(_Config):
@@ -208,6 +233,7 @@ class Regulations(_Config):
             min_dry_compounds=era.min_dry_compounds,
             red_flag_free_tyre_change=era.red_flag_free_tyre_change,
             classified_fraction=era.classified_fraction,
+            points_places=era.points_places,
             min_stops=rule.min_stops or 0,
             max_stint_laps=rule.max_stint_laps,
         )

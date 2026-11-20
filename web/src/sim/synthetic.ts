@@ -11,6 +11,7 @@ export interface SyntheticOptions {
   dnfRate?: number; // per car, per lap
   noiseSd?: number;
   passIntercept?: number;
+  warmupS?: number[]; // per stint lap from the out-lap, every compound
 }
 
 export function syntheticRace(options: SyntheticOptions = {}): SimRace {
@@ -24,6 +25,7 @@ export function syntheticRace(options: SyntheticOptions = {}): SimRace {
     dnfRate = 0.0005,
     noiseSd = 0.3,
     passIntercept = 0,
+    warmupS = [0, 0],
   } = options;
   const compounds = [1, 2, 3];
   const repeat = (value: number) => Array.from({ length: draws }, () => value);
@@ -33,7 +35,7 @@ export function syntheticRace(options: SyntheticOptions = {}): SimRace {
   const firstStint = (i: number) => (i % 2 === 0 ? 2 : 1);
   const stopLap = Math.floor(laps / 2);
   return {
-    schema_version: "0.3.0",
+    schema_version: "0.4.0",
     season: 2024,
     round: 1,
     name: "Synthetic Grand Prix",
@@ -47,6 +49,7 @@ export function syntheticRace(options: SyntheticOptions = {}): SimRace {
       max_stint_laps: null,
       red_flag_free_tyre_change: true,
       classified_fraction: 0.9,
+      points_places: 10,
     },
     mechanics: { follow_gap_s: 0.2, restart_gap_s: 0.5 },
     compounds,
@@ -57,6 +60,8 @@ export function syntheticRace(options: SyntheticOptions = {}): SimRace {
       nu: repeat(4),
       noise_sd_s: repeat(noiseSd),
       offset_s: [repeat(0.6), repeat(0), repeat(-0.6)],
+      warmup_s: compounds.map(() => warmupS.map(repeat)),
+      race_clean_laps: compounds.map(() => 100),
     },
     pit_loss: {
       transit_s: 20,

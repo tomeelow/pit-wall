@@ -80,7 +80,7 @@
     },
     "Degradation": {
       "additionalProperties": false,
-      "description": "Free-air lap time = race_median_s + pace_s[car] + offset_s[compound]\n+ slope_s_per_lap[car][compound] * tyre_age + fuel_s_per_kg * fuel_kg(lap)\n+ StudentT(nu, 0, noise_sd_s), where fuel_kg(lap) = race_fuel_kg * (1 - (lap - 0.5) / laps)\nand tyre_age counts the lap being driven.",
+      "description": "Free-air lap time = race_median_s + pace_s[car] + offset_s[compound]\n+ slope_s_per_lap[car][compound] * tyre_age + fuel_s_per_kg * fuel_kg(lap)\n+ warmup_s[compound][k] on the k-th green lap of a stint (k = 0 is the out-lap)\n+ StudentT(nu, 0, noise_sd_s), where fuel_kg(lap) = race_fuel_kg * (1 - (lap - 0.5) / laps)\nand tyre_age counts the lap being driven.",
       "properties": {
         "race_median_s": {
           "type": "number"
@@ -114,6 +114,24 @@
             "type": "array"
           },
           "type": "array"
+        },
+        "warmup_s": {
+          "items": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "race_clean_laps": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
         }
       },
       "required": [
@@ -122,7 +140,9 @@
         "fuel_s_per_kg",
         "nu",
         "noise_sd_s",
-        "offset_s"
+        "offset_s",
+        "warmup_s",
+        "race_clean_laps"
       ],
       "title": "Degradation",
       "type": "object"
@@ -298,6 +318,9 @@
         },
         "classified_fraction": {
           "type": "number"
+        },
+        "points_places": {
+          "type": "integer"
         }
       },
       "required": [
@@ -305,7 +328,8 @@
         "min_stops",
         "max_stint_laps",
         "red_flag_free_tyre_change",
-        "classified_fraction"
+        "classified_fraction",
+        "points_places"
       ],
       "title": "Rules",
       "type": "object"
@@ -454,7 +478,7 @@
   "additionalProperties": false,
   "properties": {
     "schema_version": {
-      "const": "0.3.0",
+      "const": "0.4.0",
       "type": "string"
     },
     "season": {

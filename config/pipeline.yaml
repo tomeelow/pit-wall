@@ -159,6 +159,18 @@ traffic:
   validation_seasons: [2023, 2024, 2025]
   reliability_bins: [0.0, 0.01, 0.02, 0.05, 0.1, 0.2, 0.3, 0.5, 1.0]
 
+# Tyre warm-up (Phase 8): extra time on the first laps of a stint beyond the degradation fit, per
+# era, C-number and lap of the stint. Stint laps 2-4 still show it (2026 C4/C5 +0.2 s a lap); from
+# lap 5 the residuals are within a few hundredths.
+warmup:
+  stint_laps: 4
+  # Fewer laps than this in a cell: no estimate, 0. At 40 laps the median's standard error is about
+  # 0.2 s for out-laps, whose spread (IQR ~1.5 s) comes from traffic on rejoining.
+  min_laps: 40
+  # Bootstrap resamples of the era's races, paired with the other models' draws by index.
+  draws: 200
+  seed: 20260308
+
 # Simulator inputs exported per race (Phase 6). The engine has no constants of its own.
 sim:
   # Posterior draws per race: the degradation, event and traffic draws are paired by index.
@@ -171,6 +183,29 @@ sim:
   restart_gap_s: 0.5
   # Decimal places of exported draws: enough for lap times in ms, small enough for the browser.
   decimals: 4
+  # Strategy search (Phase 8), published in the manifest for the browser.
+  strategy:
+    # 1-3 stops cover 94 % of finishers of dry races (2023 R1 - 2026 R20); more are reactive.
+    max_stops: 3
+    # Every planned stint, the last included: the 5th percentile of dry races' final stints. Shorter
+    # stints are reactive stops (damage, safety cars), which an open-loop plan cannot express.
+    min_stint_laps: 5
+    # Pit-lap spacing widens until the candidates fit: one lap apart for one and two stops.
+    max_candidates: 1500
+    # Clean laps a C-number needs in the race before the search proposes it. With fewer, its pace
+    # and wear there come from other races; the search would exploit the extrapolation (Monza 2024:
+    # 1 clean lap of C5, then a proposed 20-lap C5 stint). Dry races have a gap here: 19 race and
+    # C-number pairs have 1-9 clean laps, the next has 11.
+    min_race_clean_laps: 10
+    # Successive halving: every candidate gets first_runs simulations; each round keeps the best
+    # 1/eta (never fewer than keep) and gives them eta times the runs, up to max_runs.
+    first_runs: 16
+    eta: 3
+    keep: 5
+    max_runs: 2000
+    # The debrief scores the best strategy on runs the search never saw: picking the best of many
+    # noisy estimates flatters it.
+    holdout_runs: 1000
 
 # Simulator validation (Phase 7): ex-ante simulations of every simulable race with the actual
 # strategies, scored against the official classification. The gate is in config/thresholds.yaml.
@@ -183,3 +218,7 @@ sim_validation:
   # finishing place no run produced must not score log(0).
   smoothing: 0.5
   pit_bins: 10
+  # Undercut check (Phase 8): adjacent cars within the traffic window that stopped on consecutive
+  # green laps; the predicted P(car behind ahead after both stops) against what happened.
+  undercut_runs: 400
+  undercut_bins: [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]

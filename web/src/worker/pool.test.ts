@@ -57,7 +57,16 @@ describe("SimPool", () => {
       pool.dispose();
       expect(pooled.position).toEqual(single.position);
       expect(pooled.status).toEqual(single.status);
+      expect(pooled.classified).toEqual(single.classified);
     }
+  });
+
+  it("runs a later range of simulations, as successive rounds of a search do", async () => {
+    const pool = new SimPool(3, inProcessWorker);
+    const later = await pool.run(race, query, 40);
+    pool.dispose();
+    expect(later.first).toBe(40);
+    expect(later.position).toEqual(runSimulations(race, query, 40, query.runs).position);
   });
 
   it("rejects with the worker's error", async () => {

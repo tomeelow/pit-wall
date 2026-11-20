@@ -16,6 +16,7 @@ from pitwall.export.contract import (
     Race,
     RaceEntry,
     Stint,
+    StrategySettings,
 )
 from pitwall.export.sim import NotSimulable, build_sim
 from pitwall.ingest.storage import RaceTables, list_races, read_race
@@ -123,6 +124,7 @@ def export_bundle(
         generated_at=datetime.now(UTC),
         races=entries,
         calibration_path=_publish_calibration(data_dir, bundle_dir),
+        strategy=StrategySettings(**sim.strategy.model_dump()),
     )
     bundle_dir.mkdir(parents=True, exist_ok=True)
     (bundle_dir / "manifest.json").write_text(manifest.model_dump_json(indent=2))

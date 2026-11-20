@@ -16,6 +16,9 @@ eras:
     # the flag or not; below it, it is not classified.
     # Source: https://www.formulaonehistory.com/what-is-the-90-rule-in-f1-a-complete-guide/
     classified_fraction: 0.9
+    # Championship points go to the first ten classified (no fastest-lap point from 2025).
+    # Source: https://fia.com/sites/default/files/fia_2025_formula_1_sporting_regulations_-_issue_1_-_2024-07-31.pdf
+    points_places: 10
   "2026":
     seasons: [2026]
     # UNVERIFIED. Secondary source only: https://f1chronicle.com/f1-fuel-flow-2026-explained
@@ -28,6 +31,8 @@ eras:
     # Not yet checked against the 2026 text; 16 cars changed tyres under the 2026 Monaco red flag.
     red_flag_free_tyre_change: true
     classified_fraction: 0.9
+    # Not yet checked against the 2026 text.
+    points_places: 10
 
 # Lap-time cost of carrying fuel, s per kg per lap: Normal(mean, sd) prior. An engineering rule of
 # thumb (~0.3 s per 10 kg), not an FIA figure; the sd keeps it a prior, not a constant.
