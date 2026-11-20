@@ -12,8 +12,8 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 from pydantic.json_schema import GenerateJsonSchema
 
-SchemaVersion = Literal["0.4.0"]
-SCHEMA_VERSION: SchemaVersion = "0.4.0"
+SchemaVersion = Literal["0.5.0"]
+SCHEMA_VERSION: SchemaVersion = "0.5.0"
 
 Compound = Literal["SOFT", "MEDIUM", "HARD", "INTERMEDIATE", "WET", "UNKNOWN"]
 
@@ -55,6 +55,8 @@ class RaceEntry(_Contract):
     path: str
     # None when the race cannot be simulated; the pipeline log says why.
     sim_path: str | None
+    # None until `pitwall ingest-traces` has fetched the race's fastest laps.
+    replay_path: str | None
     dataset_version: str
 
 
@@ -256,11 +258,67 @@ class Calibration(_Contract):
     gate: GateResult
 
 
+# Replay and telemetry (Phase 10). Only fastest laps carry car data and location (ADR-007).
+
+
+class TrackOutline(_Contract):
+    """The location trace of the race's fastest lap: x and y in OpenF1 units (about 0.1 m), t_ms
+    from the line. Replay cars move along it with that lap's timing, scaled to their own lap."""
+
+    driver: str
+    lap: int
+    lap_time_s: float
+    x: list[int]
+    y: list[int]
+    t_ms: list[int]
+
+
+class ReplayCar(_Contract):
+    driver: str
+    lap_end_s: list[float]  # race time at the end of laps 1, 2, ... completed
+
+
+class FastestLap(_Contract):
+    driver: str
+    lap: int
+    lap_time_s: float
+    telemetry_path: str
+
+
+class Replay(_Contract):
+    schema_version: SchemaVersion
+    season: int
+    round: int
+    dataset_version: str
+    track: TrackOutline
+    cars: list[ReplayCar]
+    neutralisations: list[Neutralisation]
+    fastest_laps: list[FastestLap]  # fastest first; a driver without car data is left out
+
+
+class TelemetryLap(_Contract):
+    """One lap's car data by distance from the line. Distance integrates speed and is scaled so
+    every lap of the race has the same length: laps compare by distance, not time."""
+
+    schema_version: SchemaVersion
+    driver: str
+    lap: int
+    lap_time_s: float
+    distance_m: list[int]
+    time_ms: list[int]
+    speed_kmh: list[int]
+    throttle: list[int]  # percent
+    brake: list[int]  # 1 while braking; the feed has no pressure
+    gear: list[int]
+
+
 TOP_LEVEL: dict[str, type[_Contract]] = {
     "manifest": Manifest,
     "race": Race,
     "sim": SimRace,
     "calibration": Calibration,
+    "replay": Replay,
+    "telemetry": TelemetryLap,
 }
 
 

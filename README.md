@@ -55,6 +55,11 @@ race's errors (race not written) and warnings (data quirks, e.g. missing pit rec
 C-numbers come from Pirelli's published allocations in `config/compound_allocation.yaml`, with the
 press releases cited per season.
 
+Ingest also fetches each driver's fastest-lap car data and one lap of track location for the
+replay and telemetry views ([ADR-007](docs/adr/007-fastest-lap-traces.md)); `make ingest-traces`
+fills them in for races stored earlier. `make export` fails if a file is over the size budgets in
+`config/budgets.yaml`.
+
 The deploy workflow needs GitHub Pages set to deploy from GitHub Actions.
 
 ## Simulator calibration

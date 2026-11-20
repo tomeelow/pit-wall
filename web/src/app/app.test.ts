@@ -6,9 +6,15 @@ import { readView, writeView } from "./url";
 
 describe("view in the URL", () => {
   it("round-trips, and falls back on anything it does not know", () => {
-    const view = { race: "2025-14", driver: "NOR", tab: "optimise" as const, lap: 22 };
+    const view = { race: "2025-14", driver: "NOR", tab: "telemetry" as const, lap: 22, vs: "PIA" };
     expect(readView(writeView(view))).toEqual(view);
-    expect(readView("?tab=nope&lap=-3")).toEqual({ race: null, driver: null, tab: "race", lap: null });
+    expect(readView("?tab=nope&lap=-3")).toEqual({
+      race: null,
+      driver: null,
+      tab: "race",
+      lap: null,
+      vs: null,
+    });
   });
 });
 

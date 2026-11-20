@@ -1,0 +1,69 @@
+{
+  "additionalProperties": false,
+  "description": "One lap's car data by distance from the line. Distance integrates speed and is scaled so\nevery lap of the race has the same length: laps compare by distance, not time.",
+  "properties": {
+    "schema_version": {
+      "const": "0.5.0",
+      "type": "string"
+    },
+    "driver": {
+      "type": "string"
+    },
+    "lap": {
+      "type": "integer"
+    },
+    "lap_time_s": {
+      "type": "number"
+    },
+    "distance_m": {
+      "items": {
+        "type": "integer"
+      },
+      "type": "array"
+    },
+    "time_ms": {
+      "items": {
+        "type": "integer"
+      },
+      "type": "array"
+    },
+    "speed_kmh": {
+      "items": {
+        "type": "integer"
+      },
+      "type": "array"
+    },
+    "throttle": {
+      "items": {
+        "type": "integer"
+      },
+      "type": "array"
+    },
+    "brake": {
+      "items": {
+        "type": "integer"
+      },
+      "type": "array"
+    },
+    "gear": {
+      "items": {
+        "type": "integer"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "driver",
+    "lap",
+    "lap_time_s",
+    "distance_m",
+    "time_ms",
+    "speed_kmh",
+    "throttle",
+    "brake",
+    "gear"
+  ],
+  "title": "TelemetryLap",
+  "type": "object"
+}

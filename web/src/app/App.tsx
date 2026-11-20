@@ -1,23 +1,31 @@
 import { useEffect, useState } from "react";
 import type { Manifest } from "../contract/manifest";
-import { loadCalibration, loadManifest, loadRace, loadSim } from "./bundle";
+import { loadCalibration, loadManifest, loadRace, loadReplay, loadSim } from "./bundle";
+import { Debrief } from "./Debrief";
 import { useLoad } from "./hooks";
 import { ModelCard } from "./ModelCard";
 import { Optimise } from "./Optimise";
 import { decisionLaps } from "./plan";
 import { RaceView } from "./RaceView";
+import { ReplayView } from "./Replay";
 import { Empty, Failure, Skeleton } from "./States";
+import { TelemetryView } from "./Telemetry";
 import { Undercut } from "./Undercut";
 import { raceKey, readView, writeView, type Tab, type View } from "./url";
 import { WhatIf } from "./WhatIf";
 
 const TAB_NAMES: Record<Tab, string> = {
   race: "Race",
+  replay: "Replay",
+  telemetry: "Telemetry",
   whatif: "What if",
   optimise: "Optimise",
   undercut: "Undercut",
+  debrief: "Debrief",
   model: "Model card",
 };
+
+const STRATEGY_TABS: readonly Tab[] = ["whatif", "optimise", "undercut", "debrief"];
 
 const MANIFEST = "manifest.json";
 
@@ -92,6 +100,7 @@ function Lab({ manifest }: { manifest: Manifest }) {
     manifest.races.find((r) => raceKey(r) === view.race) ?? simulated.at(-1) ?? manifest.races.at(-1);
   const race = useLoad(entry?.path ?? null, loadRace);
   const sim = useLoad(entry?.sim_path ?? null, loadSim);
+  const replay = useLoad(entry?.replay_path ?? null, loadReplay);
   const calibration = useLoad(manifest.calibration_path, loadCalibration);
   const drivers = race.status === "ready" ? race.value.drivers.map((d) => d.driver) : [];
   const driver = view.driver && drivers.includes(view.driver) ? view.driver : (drivers[0] ?? null);
@@ -131,9 +140,36 @@ function Lab({ manifest }: { manifest: Manifest }) {
       return <Empty title={`No race state for ${driver ?? "this driver"}`}>Pick a driver who started the race.</Empty>;
     }
     const key = `${entry.path}:${driver}`;
+    if (view.tab === "debrief") return <Debrief key={entry.path} race={sim.value} car={car} settings={manifest.strategy} />;
     if (view.tab === "whatif") return <WhatIf key={key} race={sim.value} car={car} {...tool} />;
     if (view.tab === "optimise") return <Optimise key={key} race={sim.value} car={car} {...tool} />;
     return <Undercut key={key} race={sim.value} car={car} {...tool} />;
+  };
+
+  const analytics = () => {
+    if (replay.status === "none") {
+      return (
+        <Empty title="No replay for this race yet">
+          Replay and telemetry need the race&rsquo;s fastest laps, which the pipeline has not fetched for this race.
+        </Empty>
+      );
+    }
+    if (replay.status === "loading") return <Skeleton rows={14} label="Loading the replay" />;
+    if (replay.status === "error") return <Failure message={replay.message} />;
+    if (race.status !== "ready") return <Skeleton rows={14} label="Loading the race" />;
+    const onDriver = (d: string) => change({ driver: d, lap: null });
+    if (view.tab === "replay") {
+      return <ReplayView key={entry.path} race={race.value} replay={replay.value} driver={driver} onDriver={onDriver} />;
+    }
+    return (
+      <TelemetryView
+        replay={replay.value}
+        driver={driver}
+        vs={view.vs}
+        onDriver={onDriver}
+        onVs={(vs) => change({ vs })}
+      />
+    );
   };
 
   return (
@@ -202,7 +238,8 @@ function Lab({ manifest }: { manifest: Manifest }) {
           ) : (
             <Skeleton rows={20} label="Loading the race" />
           ))}
-        {(view.tab === "whatif" || view.tab === "optimise" || view.tab === "undercut") && strategy()}
+        {(view.tab === "replay" || view.tab === "telemetry") && analytics()}
+        {STRATEGY_TABS.includes(view.tab) && strategy()}
         {view.tab === "model" && (
           <ModelCard manifest={manifest} entry={entry} sim={simReady} calibration={calibration} />
         )}

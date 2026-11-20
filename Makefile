@@ -1,4 +1,4 @@
-.PHONY: setup verify verify-pipeline verify-web bench replay validate-sim undercut-check debrief contract contract-check ingest fit backtest fit-events validate-events fit-traffic validate-traffic fit-warmup export build dev
+.PHONY: setup verify verify-pipeline verify-web bench replay validate-sim undercut-check debrief contract contract-check ingest ingest-traces fit backtest fit-events validate-events fit-traffic validate-traffic fit-warmup export build dev
 
 PY := cd pipeline && uv run --frozen
 WEB := cd web && npm run -s
@@ -68,6 +68,10 @@ contract-check:
 ingest:
 	@test -n "$(SEASON)" || { echo "usage: make ingest SEASON=2024 [ROUND=1]"; exit 2; }
 	$(PY) pitwall ingest --season $(SEASON) $(if $(ROUND),--round $(ROUND))
+
+# Fastest-lap car data and track location for stored races that have none (SEASON=2024 for one).
+ingest-traces:
+	$(PY) pitwall ingest-traces $(if $(SEASON),--season $(SEASON))
 
 # Fit the degradation model per era (ERA=2026 for one) and export draws if the gate passes.
 fit:

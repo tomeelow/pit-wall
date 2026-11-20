@@ -1,11 +1,13 @@
 import type { Calibration } from "../contract/calibration";
 import type { Manifest } from "../contract/manifest";
 import type { Race } from "../contract/race";
+import type { Replay } from "../contract/replay";
 import type { SimRace } from "../contract/sim";
+import type { TelemetryLap } from "../contract/telemetry";
 
 // Typed as the generated literal: when the pipeline bumps SCHEMA_VERSION, tsc fails here until
 // the app has been checked against the new contract.
-export const SUPPORTED_SCHEMA: Manifest["schema_version"] = "0.4.0";
+export const SUPPORTED_SCHEMA: Manifest["schema_version"] = "0.5.0";
 
 const major = (version: string) => version.split(".")[0];
 
@@ -29,3 +31,5 @@ export const loadManifest = () => fetchBundleFile<Manifest>("manifest.json");
 export const loadRace = (path: string) => fetchBundleFile<Race>(path);
 export const loadSim = (path: string) => fetchBundleFile<SimRace>(path);
 export const loadCalibration = (path: string) => fetchBundleFile<Calibration>(path);
+export const loadReplay = (path: string) => fetchBundleFile<Replay>(path);
+export const loadTelemetry = (path: string) => fetchBundleFile<TelemetryLap>(path);

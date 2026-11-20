@@ -1,5 +1,6 @@
 """Canonical race tables → static bundle described by the export contract."""
 
+import gzip
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -7,7 +8,7 @@ import pandas as pd
 from loguru import logger
 from pydantic import ValidationError
 
-from pitwall.config import Regulations, SimConfig
+from pitwall.config import BundleBudgets, Regulations, SimConfig
 from pitwall.export.contract import (
     SCHEMA_VERSION,
     Calibration,
@@ -18,8 +19,14 @@ from pitwall.export.contract import (
     Stint,
     StrategySettings,
 )
+from pitwall.export.replay import build_replay
 from pitwall.export.sim import NotSimulable, build_sim
 from pitwall.ingest.storage import RaceTables, list_races, read_race
+from pitwall.ingest.traces import read_traces
+
+
+class OverBudget(RuntimeError):
+    """Bundle files larger than config/budgets.yaml allows; the export is not usable."""
 
 
 def driver_stints(laps: pd.DataFrame) -> list[Stint]:
@@ -67,11 +74,14 @@ def build_race(tables: RaceTables) -> Race:
     )
 
 
-def _write(bundle_dir: Path, relative: str, json: str) -> None:
+def _write(bundle_dir: Path, relative: str, json: str) -> int:
+    """Writes the file and returns its gzipped size, the size the browser downloads."""
     out = bundle_dir / relative
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json)
-    logger.info("exported {} ({} bytes)", relative, out.stat().st_size)
+    gz = len(gzip.compress(json.encode()))
+    logger.info("exported {} ({} bytes, {} gzipped)", relative, out.stat().st_size, gz)
+    return gz
 
 
 def _publish_calibration(data_dir: Path, bundle_dir: Path) -> str | None:
@@ -88,18 +98,45 @@ def _publish_calibration(data_dir: Path, bundle_dir: Path) -> str | None:
     return "calibration.json"
 
 
+def _write_replay(
+    bundle_dir: Path, path: Path, tables: RaceTables, stem: str, budgets: BundleBudgets
+) -> tuple[str | None, list[str]]:
+    """The race's replay and telemetry files, if its traces have been fetched, and every file over
+    budget."""
+    traces = read_traces(path)
+    built = build_replay(tables, *traces, f"{stem}/telemetry") if traces else None
+    if built is None:
+        return None, []
+    replay, laps = built
+    over = []
+    replay_path = f"{stem}.replay.json"
+    if _write(bundle_dir, replay_path, replay.model_dump_json()) > budgets.replay_gz_bytes:
+        over.append(replay_path)
+    for lap, entry in zip(laps, replay.fastest_laps, strict=True):
+        size = _write(bundle_dir, entry.telemetry_path, lap.model_dump_json())
+        if size > budgets.telemetry_lap_gz_bytes:
+            over.append(entry.telemetry_path)
+    return replay_path, over
+
+
 def export_bundle(
-    data_dir: Path, bundle_dir: Path, git_sha: str, sim: SimConfig, regulations: Regulations
+    data_dir: Path,
+    bundle_dir: Path,
+    git_sha: str,
+    sim: SimConfig,
+    regulations: Regulations,
+    budgets: BundleBudgets,
 ) -> Manifest:
     entries = []
+    over: list[str] = []
     for path in list_races(data_dir):
         tables = read_race(path)
         race = build_race(tables)
         stem = f"races/{race.season}/{race.round:02d}"
-        _write(bundle_dir, f"{stem}.json", race.model_dump_json())
+        core = _write(bundle_dir, f"{stem}.json", race.model_dump_json())
         sim_path: str | None = f"{stem}.sim.json"
         try:
-            _write(
+            core += _write(
                 bundle_dir,
                 f"{stem}.sim.json",
                 build_sim(path, tables, regulations, sim).model_dump_json(),
@@ -107,6 +144,10 @@ def export_bundle(
         except NotSimulable as reason:
             logger.warning("{}: not simulable: {}", stem, reason)
             sim_path = None
+        if core > budgets.race_core_gz_bytes:
+            over.append(f"{stem}.json + .sim.json")
+        replay_path, replay_over = _write_replay(bundle_dir, path, tables, stem, budgets)
+        over += replay_over
         entries.append(
             RaceEntry(
                 season=race.season,
@@ -114,9 +155,12 @@ def export_bundle(
                 name=race.name,
                 path=f"{stem}.json",
                 sim_path=sim_path,
+                replay_path=replay_path,
                 dataset_version=race.dataset_version,
             )
         )
+    if over:
+        raise OverBudget(f"over the size budget in config/budgets.yaml: {', '.join(over)}")
 
     manifest = Manifest(
         schema_version=SCHEMA_VERSION,

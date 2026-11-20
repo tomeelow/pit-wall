@@ -30,7 +30,7 @@ Update this table as phases land. It is the first thing to read when picking up 
 | 7 — Simulator validation | ☑ done | 75 dry races × 4 start laps × 1,000 ex-ante runs: coverage 0.48 / 0.78 at 50 / 80 %, log score −1.93 vs −2.38 for the order at the start lap; beats both baselines in every segment. Overconfident from 75 % distance (0.44 / 0.71) and after real neutralisations; Miami 2025 refused (race-time gap). Phase 7 → Findings |
 | 8 — Strategy optimiser, counterfactuals, undercut | ☑ done | Counterfactual, optimiser (successive halving, recovers a known optimum), undercut and debrief in `web/src/sim`; tyre warm-up fitted (≤ 0.64 s, barely moves calibration). Undercut beats the base rate on 181 real pairs (Brier 0.185 vs 0.205). Full search 4 s on one thread. Debrief prefers later stops (open-loop rivals, linear wear). Phase 8 → Findings |
 | 9 — Strategy lab UI | ☑ done | Rim theme, dark first (light on request). Race, What if, Optimise, Undercut and Model card screens, all simulation on the worker pool, view kept in the URL; editor rule check mirrors the engine's DSQ test. Calibration is shown per segment: no per-track scores are exported yet. Phase 9 → Findings |
-| 10 — Analytics: replay, telemetry, debrief | ☐ not started | |
+| 10 — Analytics: replay, telemetry, debrief | ☑ done | Replay, Telemetry and Debrief screens. Fastest-lap car data and one lap of location per race (ADR-007) instead of full-race traces; cars placed on the replay by official lap times. Debrief runs on demand in the browser, ex ante and ex post in separate tables. `pitwall export` fails over the budgets in `config/budgets.yaml`. Phase 10 → Findings |
 | 11 — Post-weekend automation & publishing | ☐ not started | |
 | 12 — Docs & polish | ☐ not started | |
 
@@ -1247,6 +1247,20 @@ Per-race bundle limits live in `config/budgets.yaml` (e.g. race core < 1 MB gzip
 telemetry lazily per driver-lap). CI fails a bundle that exceeds them.
 
 **Deliverable:** three analytics views, size budgets enforced.
+
+### Findings
+
+- **Fastest laps, not full-race traces** ([ADR-007](adr/007-fastest-lap-traces.md)). Full-race
+  location and car data would be about 18 GB of raw responses; one windowed lap is about 80 KB.
+  Telemetry covers each driver's fastest lap at pace. The replay draws the outline from the race's
+  fastest lap and moves every car along it on its own official lap times, so positions at the
+  line are exact and positions inside a lap are estimates (pit laps most of all); the screen says
+  so.
+- **Distance.** Integrated speed puts Monza 2024 at 5,743 m against the official 5,793 m; laps are
+  scaled to the race's median length so corners line up across drivers.
+- **Debrief on demand.** Decision regret runs in the browser on the worker pool, per driver or for
+  the whole field (Bahrain 2023: 75 s for 20 drivers on a 10-core laptop), and fills the biggest-swings tables as
+  drivers finish. Worst calls (ex ante) and worst outcomes (ex post) are separate tables.
 
 ---
 

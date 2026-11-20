@@ -164,6 +164,7 @@ class PipelineConfig(_Config):
     bundle_dir: Path
     openf1_url: str
     calendar_cache_hours: float = Field(gt=0)
+    openf1_min_interval_s: float = Field(ge=0)
     min_hours_after_race: float = Field(ge=0)
     validation: ValidationConfig
     classification: ClassificationConfig
@@ -261,6 +262,28 @@ class RaceAllocation(_Config):
 class SeasonAllocation(_Config):
     sources: list[str] = Field(min_length=1)
     races: list[RaceAllocation]
+
+
+class SimBenchmark(_Config):
+    races: int = Field(gt=0)
+    laps: int = Field(gt=0)
+    cars: int = Field(gt=0)
+    max_seconds: float = Field(gt=0)
+
+
+class BundleBudgets(_Config):
+    race_core_gz_bytes: int = Field(gt=0)
+    replay_gz_bytes: int = Field(gt=0)
+    telemetry_lap_gz_bytes: int = Field(gt=0)
+
+
+class Budgets(_Config):
+    sim_benchmark: SimBenchmark
+    bundle: BundleBudgets
+
+
+def load_budgets(path: Path = CONFIG_DIR / "budgets.yaml") -> Budgets:
+    return Budgets.model_validate(yaml.safe_load(path.read_text()))
 
 
 def load_config(path: Path = CONFIG_DIR / "pipeline.yaml") -> PipelineConfig:

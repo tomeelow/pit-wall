@@ -4,7 +4,7 @@ from typing import Any
 import pandas as pd
 import pytest
 
-from pitwall.config import RaceAllocation, load_config, load_team_ids
+from pitwall.config import RaceAllocation, load_budgets, load_config, load_team_ids
 from pitwall.ingest.neutralisations import parse_neutralisations, parse_yellows
 from pitwall.ingest.openf1 import (
     canonical_laps,
@@ -27,6 +27,7 @@ ALLOCATION = RaceAllocation(round=1, race="Test Grand Prix", hard=1, medium=2, s
 RACE_START = pd.Timestamp("2024-03-02 15:00", tz="UTC")
 LAP1_S = 100.0
 CONFIG = load_config()
+BUDGETS = load_budgets().bundle
 
 
 @dataclass
