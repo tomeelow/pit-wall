@@ -16,9 +16,10 @@ from pitwall.config import (
     load_config,
     load_regulations,
     load_team_ids,
+    load_thresholds,
 )
 from pitwall.export.bundle import export_bundle
-from pitwall.export.contract import write_schemas
+from pitwall.export.contract import Calibration, Manifest, SimRace, write_schemas
 from pitwall.ingest.openf1 import OpenF1, fetch_race, finished_rounds
 from pitwall.ingest.storage import (
     RaceTables,
@@ -32,6 +33,7 @@ from pitwall.ingest.validate import RaceReport, check_prepared, validate_race, w
 from pitwall.models import backtest, degradation, events, traffic
 from pitwall.models.hazards import RateModel
 from pitwall.prepare import prepare_race
+from pitwall.validate import simulator
 
 
 def _git_sha() -> str:
@@ -412,6 +414,55 @@ def validate_traffic(config: PipelineConfig) -> Path:
     return report
 
 
+def validate_sim(config: PipelineConfig) -> bool:
+    """Run the engine ex ante over every simulable race in the exported bundle, score it and apply
+    the publish gate. Needs `make export` first. A run that fails the gate is kept as
+    calibration.rejected.json; the accepted calibration stays."""
+    settings = config.sim_validation
+    manifest = Manifest.model_validate_json((config.bundle_dir / "manifest.json").read_text())
+    races = {
+        (e.season, e.round): SimRace.model_validate_json(
+            (config.bundle_dir / e.sim_path).read_text()
+        )
+        for e in manifest.races
+        if e.sim_path
+    }
+    logger.info("simulating {} races, {} runs per start", len(races), settings.runs)
+    found = simulator.run_backtest(REPO_ROOT / "web", config.bundle_dir, settings)
+    scored = simulator.score(simulator.entries(found, races), settings)
+
+    out = _model_dir(config, "sim")
+    out.mkdir(parents=True, exist_ok=True)
+    accepted_path = out / "calibration.json"
+    accepted = (
+        Calibration.model_validate_json(accepted_path.read_text())
+        if accepted_path.exists()
+        else None
+    )
+    thresholds = load_thresholds().simulator
+    report = simulator.calibration(scored, races, settings, accepted, thresholds, _git_sha())
+    scored.drop(columns="counts").to_parquet(out / "validation.parquet", index=False)
+    table = pd.DataFrame([s.model_dump() for s in report.segments]).set_index("segment")
+    histogram = pd.DataFrame(
+        {"pit_bin": range(1, settings.pit_bins + 1), "share": report.pit_histogram}
+    ).set_index("pit_bin")
+    gate = "passed" if report.gate.passed else "FAILED: " + "; ".join(report.gate.reasons)
+    (out / "validation.md").write_text(
+        f"# Simulator calibration\n\nGate: {gate}\n\n"
+        f"{settings.runs} ex-ante runs per race and start lap, actual strategies. "
+        "coverage_*: randomised PIT (nominal 0.5 / 0.8); interval_coverage_*: place inside the "
+        "simulated central interval (at least nominal); log scores in nats per car.\n\n"
+        f"{_markdown(table)}\n\n## PIT histogram (flat when calibrated)\n\n"
+        f"{_markdown(histogram)}\n"
+    )
+    target = accepted_path if report.gate.passed else out / "calibration.rejected.json"
+    target.write_text(report.model_dump_json(indent=2))
+    logger.info("simulator calibration:\n{}", table.to_string())
+    if not report.gate.passed:
+        logger.error("calibration gate failed: {}", report.gate.reasons)
+    return report.gate.passed
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="pitwall")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -445,6 +496,9 @@ def main() -> None:
         "validate-traffic", help="leave-one-season-out validation of the pass model"
     )
 
+    commands.add_parser(
+        "validate-sim", help="calibrate the simulator on the exported bundle; apply the gate"
+    )
     commands.add_parser("export", help="write the static bundle from all ingested races")
 
     contract = commands.add_parser("contract", help="write JSON Schema for the export contract")
@@ -473,6 +527,9 @@ def main() -> None:
                 sys.exit(1)
         case "validate-traffic":
             validate_traffic(config)
+        case "validate-sim":
+            if not validate_sim(config):
+                sys.exit(1)
         case "export":
             export_bundle(
                 config.data_dir, config.bundle_dir, _git_sha(), config.sim, load_regulations()

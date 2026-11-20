@@ -12,8 +12,8 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 from pydantic.json_schema import GenerateJsonSchema
 
-SchemaVersion = Literal["0.2.0"]
-SCHEMA_VERSION: SchemaVersion = "0.2.0"
+SchemaVersion = Literal["0.3.0"]
+SCHEMA_VERSION: SchemaVersion = "0.3.0"
 
 Compound = Literal["SOFT", "MEDIUM", "HARD", "INTERMEDIATE", "WET", "UNKNOWN"]
 
@@ -63,6 +63,7 @@ class Manifest(_Contract):
     git_sha: str
     generated_at: datetime
     races: list[RaceEntry]
+    calibration_path: str | None  # None until the simulator has been validated
 
 
 # Simulator inputs (Phase 6). Every list named per draw has SimRace.draws entries, and draw i of
@@ -73,12 +74,14 @@ NeutralisationKind = Literal["SC", "VSC", "RED"]
 
 class Rules(_Contract):
     """What every finishing strategy must satisfy; breaking a rule is a disqualification. A stop
-    under a red flag costs nothing when red_flag_free_tyre_change is set."""
+    under a red flag costs nothing when red_flag_free_tyre_change is set. A car that retires is
+    still classified if it covered classified_fraction of the race's laps (rounded down)."""
 
     min_dry_compounds: int
     min_stops: int
     max_stint_laps: int | None
     red_flag_free_tyre_change: bool
+    classified_fraction: float
 
 
 class Mechanics(_Contract):
@@ -195,7 +198,50 @@ class SimRace(_Contract):
     realised: list[Neutralisation]  # what happened: for replays and ex-post views only
 
 
-TOP_LEVEL: dict[str, type[_Contract]] = {"manifest": Manifest, "race": Race, "sim": SimRace}
+# Simulator calibration (Phase 7): ex-ante simulations of every simulable race with the actual
+# strategies, scored against the official classification.
+
+
+class SegmentScore(_Contract):
+    """Scores of one group of car-starts. coverage_*: share of randomised PIT values inside the
+    central interval (nominal 0.5 / 0.8 when calibrated). interval_coverage_*: share of finishes
+    inside the simulated central interval of places (at least nominal, the places being discrete).
+    log_score*: mean log probability of the actual result, nats; higher is better."""
+
+    segment: str
+    races: int
+    entries: int
+    coverage_50: float
+    coverage_80: float
+    interval_coverage_50: float
+    interval_coverage_80: float
+    log_score: float
+    log_score_start_order: float  # baseline: finish follows the order at the start lap
+    log_score_lap1_order: float  # baseline: finish follows the order after lap 1 (for the grid)
+
+
+class GateResult(_Contract):
+    passed: bool
+    reasons: list[str]  # why it failed; empty when it passed
+
+
+class Calibration(_Contract):
+    schema_version: SchemaVersion
+    git_sha: str
+    generated_at: datetime
+    dataset_version: str  # hash of every scored race's dataset version
+    runs: int  # simulations per race and start lap
+    segments: list[SegmentScore]  # "all" first
+    pit_histogram: list[float]  # share of car-starts per equal-width PIT bin; flat when calibrated
+    gate: GateResult
+
+
+TOP_LEVEL: dict[str, type[_Contract]] = {
+    "manifest": Manifest,
+    "race": Race,
+    "sim": SimRace,
+    "calibration": Calibration,
+}
 
 
 class _UntitledFields(GenerateJsonSchema):

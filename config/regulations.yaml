@@ -12,6 +12,10 @@ eras:
     # Tyres may be changed while a red flag has stopped the race: a stop then costs no time.
     # Source: https://www.skysports.com/f1/news/12433/13248475/f1-red-flag-tyre-change-rules-explained-lando-norris-regulation-complaints-after-sao-paulo-gp-disappointment
     red_flag_free_tyre_change: true
+    # A car is classified if it covered this share of the race's laps (rounded down), running at
+    # the flag or not; below it, it is not classified.
+    # Source: https://www.formulaonehistory.com/what-is-the-90-rule-in-f1-a-complete-guide/
+    classified_fraction: 0.9
   "2026":
     seasons: [2026]
     # UNVERIFIED. Secondary source only: https://f1chronicle.com/f1-fuel-flow-2026-explained
@@ -23,6 +27,7 @@ eras:
     min_dry_compounds: 2
     # Not yet checked against the 2026 text; 16 cars changed tyres under the 2026 Monaco red flag.
     red_flag_free_tyre_change: true
+    classified_fraction: 0.9
 
 # Lap-time cost of carrying fuel, s per kg per lap: Normal(mean, sd) prior. An engineering rule of
 # thumb (~0.3 s per 10 kg), not an FIA figure; the sd keeps it a prior, not a constant.
