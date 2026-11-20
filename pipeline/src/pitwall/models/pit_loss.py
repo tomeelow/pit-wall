@@ -97,7 +97,7 @@ def track_losses(stops: pd.DataFrame) -> pd.DataFrame:
 
 def condition_factors(stops: pd.DataFrame) -> dict[str, float]:
     """Loss under SC and VSC as a fraction of the same track's median green loss, pooled over
-    tracks (median of per-stop ratios)."""
+    tracks (median of per-stop ratios). Pass one era's stops: the factors differ by era."""
     green = stops[stops["condition"] == "GREEN"].groupby("track")["loss_s"].median()
     ratio = stops["loss_s"] / stops["track"].map(green)
     return {kind: float(ratio[stops["condition"] == kind].median()) for kind in ("SC", "VSC")}

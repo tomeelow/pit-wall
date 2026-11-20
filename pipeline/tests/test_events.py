@@ -124,3 +124,19 @@ def test_race_parameters_never_learn_from_the_race_itself(race_tables: RaceTable
     assert history.parameters("2024-02", ERA.name).stationary_s == [2.4, 2.4, 2.4]
     assert first.duration_laps == {"SC": [3], "VSC": [], "RED": []}
     assert first.pit_loss_from == "track"
+
+
+def test_neutralised_pace_is_not_pooled_across_eras(race_tables: RaceTables) -> None:
+    laps = race_tables.laps
+    slower = laps.assign(
+        lap_time_s=laps["lap_time_s"].where(laps["track_status"] != "SC", laps["lap_time_s"] * 2)
+    )
+    later = replace(
+        race_tables,
+        event=race_tables.event.model_copy(update={"season": 2026}),
+        laps=slower.assign(season=2026),
+    )
+    history = History.of([race_tables, later], EVENTS, load_regulations())
+    alone = pit_loss.neutralised_pace(race_tables)["factor"].median()
+    assert history.parameters("2024-01", ERA.name).neutralised_lap_factor["SC"] == round(alone, 3)
+    assert history.parameters("2026-01", "2026").neutralised_lap_factor["SC"] > 2 * alone - 0.1
