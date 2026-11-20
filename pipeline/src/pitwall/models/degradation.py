@@ -4,8 +4,11 @@
                              + slope[track, C, team] * tyre_age + fuel_effect * fuel_kg(lap)
                              + StudentT(nu, 0, noise[race])
 
-    slope[track, C, team] ~ Normal(slope[track, C], team_sd)
-    slope[track, C]       ~ Normal(slope[C], track_sd)
+    slope[track, C, team] = slope[track, C] + team deviation (sd team_sd)
+    slope[track, C]       = slope[C] + track deviation (sd track_sd)
+
+Track deviations sum to zero within each C-number, team deviations within each track and
+C-number, so `slope[C]` is the average over the tracks the era raced that C-number on.
 
 Fuel burn-off and track evolution move together with every lap and are not separately
 identified: `fuel_effect` absorbs both. Tyre wear is separable from them only because tyre age
@@ -121,11 +124,32 @@ class Groups:
         return {name: range(len(found)) for name, found in self.positions.items()}
 
 
-def _zero_sum_within(values: TensorVariable, segment: np.ndarray, segments: int) -> TensorVariable:
-    """`values` minus the mean of their segment."""
-    totals = pt.zeros(segments)[segment].inc(values)
-    counts = np.bincount(segment, minlength=segments)
-    return values - (totals / counts)[segment]
+def _zero_sum_deviation(
+    name: str, sd: TensorVariable, segment: np.ndarray, segments: int
+) -> TensorVariable:
+    """Normal deviations with scale `sd` that sum to zero within each segment.
+
+    A segment of k members gets k - 1 free standard normals mapped through a Helmert basis, which
+    is distributed exactly as k iid normals minus their mean but leaves no direction that only
+    the prior constrains. Without the constraint a parent and the mean of its few children trade
+    off along a ridge the sampler crosses slowly (R-hat > 1.01)."""
+    rows, cols, values = [], [], []
+    free = 0
+    for s in range(segments):
+        members = np.flatnonzero(segment == s)
+        for j in range(1, len(members)):
+            scale = 1 / np.sqrt(j * (j + 1))
+            rows += list(members[: j + 1])
+            cols += [free] * (j + 1)
+            values += [scale] * j + [-j * scale]
+            free += 1
+    if free == 0:  # every segment has a single member: nothing can deviate
+        return pt.zeros(len(segment))
+    z = pm.Normal(name, 0, 1, shape=free)
+    weights = np.array(values)
+    return sd * pt.zeros(len(segment))[np.array(rows, dtype=int)].inc(
+        weights * z[np.array(cols, dtype=int)]
+    )
 
 
 def build_model(
@@ -138,18 +162,21 @@ def build_model(
         slope_c = pm.Normal("slope_c", p.slope_s_per_lap.mean, p.slope_s_per_lap.sd, dims="c")
         track_sd = pm.HalfNormal("slope_track_sd", p.slope_track_sd)
         team_sd = pm.HalfNormal("slope_team_sd", p.slope_team_sd)
-        track_z = pm.Normal("slope_track_z", 0, 1, dims="track_c")
-        slope_track = slope_c[g.parent("track_c", "c")] + track_sd * track_z
-        team_z = pm.Normal("slope_team_z", 0, 1, dims="track_c_team")
-        slope_team = slope_track[g.parent("track_c_team", "track_c")] + team_sd * team_z
+        track_of = g.parent("track_c", "c")
+        slope_track = slope_c[track_of] + _zero_sum_deviation(
+            "slope_track_z", track_sd, track_of, len(g.positions["c"])
+        )
+        team_of = g.parent("track_c_team", "track_c")
+        slope_team = slope_track[team_of] + _zero_sum_deviation(
+            "slope_team_z", team_sd, team_of, len(g.positions["track_c"])
+        )
         pm.Deterministic("slope_track", slope_track, dims="track_c")
         pm.Deterministic("slope_team", slope_team, dims="track_c_team")
 
         offset_c = pm.ZeroSumNormal("offset_c", p.compound_offset_sd, dims="c")
         offset_race_sd = pm.HalfNormal("offset_race_sd", p.compound_track_sd)
-        offset_z = pm.Normal("offset_race_z", 0, 1, dims="race_c")
-        deviation = _zero_sum_within(
-            offset_race_sd * offset_z, g.parent("race_c", "race"), len(g.positions["race"])
+        deviation = _zero_sum_deviation(
+            "offset_race_z", offset_race_sd, g.parent("race_c", "race"), len(g.positions["race"])
         )
         offset_race = offset_c[g.parent("race_c", "c")] + deviation
         pm.Deterministic("offset_race", offset_race, dims="race_c")
