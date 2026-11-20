@@ -20,21 +20,20 @@ average.*
 ## How it works
 
 ```mermaid
-flowchart LR
-  O[OpenF1<br/>laps, stints, pits,<br/>race control, telemetry] --> I
+flowchart TD
+  O[OpenF1: laps, stints, pits, race control, telemetry] --> I
   subgraph A [GitHub Actions, after each race weekend]
-    I[Ingest and validate] --> C[Classify laps,<br/>rebuild race state]
-    C --> F[Fit models<br/>degradation, pit loss,<br/>SC/VSC, traffic, warm-up]
-    F --> G{Gates<br/>sampler diagnostics,<br/>calibration}
-    G -- pass --> E[Export through<br/>the contract]
-    G -- fail --> K[Keep the previous<br/>parameters]
-    K --> E
+    I[Ingest and validate] --> C[Classify laps, rebuild race state]
+    C --> F[Fit degradation, pit loss, SC/VSC, traffic, warm-up]
+    F --> G{Gates: sampler diagnostics, calibration}
+    G -- pass: new parameters --> E[Export through the contract]
+    G -- fail: previous parameters --> E
   end
-  E --> R[(GitHub Releases<br/>race data and models)]
-  R --> P[GitHub Pages<br/>static bundle]
-  P --> B
+  E --> R[(GitHub Releases: race data and models)]
+  R --> P[GitHub Pages: static bundle]
+  P --> U
   subgraph B [Your browser]
-    U[Strategy lab UI] -- postMessage --> W[Web Worker pool<br/>Monte Carlo engine]
+    U[Strategy lab UI] -- postMessage --> W[Web Worker pool: Monte Carlo engine]
   end
 ```
 
