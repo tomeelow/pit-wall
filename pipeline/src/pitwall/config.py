@@ -112,6 +112,13 @@ class TrafficConfig(_Config):
     reliability_bins: list[float] = Field(min_length=2)
 
 
+class SimConfig(_Config):
+    draws: int = Field(ge=1)
+    follow_gap_s: float = Field(gt=0)
+    restart_gap_s: float = Field(gt=0)
+    decimals: int = Field(ge=1)
+
+
 class PipelineConfig(_Config):
     data_dir: Path
     bundle_dir: Path
@@ -123,17 +130,39 @@ class PipelineConfig(_Config):
     degradation: DegradationConfig
     events: EventsConfig
     traffic: TrafficConfig
+    sim: SimConfig
 
 
 class Era(_Config):
     name: str
     seasons: list[int] = Field(min_length=1)
     race_fuel_kg: float = Field(gt=0)
+    min_dry_compounds: int = Field(ge=1)
+    red_flag_free_tyre_change: bool
+
+
+class RaceRule(_Config):
+    """A one-off rule for one race; None leaves the era's rule."""
+
+    season: int
+    round: int = Field(ge=1)
+    min_stops: int | None = Field(default=None, ge=1)
+    max_stint_laps: int | None = Field(default=None, ge=1)
+
+
+class RaceRules(_Config):
+    """Every rule a race's strategies must satisfy."""
+
+    min_dry_compounds: int
+    min_stops: int
+    max_stint_laps: int | None
+    red_flag_free_tyre_change: bool
 
 
 class Regulations(_Config):
     eras: list[Era]
     fuel_effect_s_per_kg: NormalPrior
+    race_rules: list[RaceRule]
 
     @model_validator(mode="after")
     def _disjoint(self) -> "Regulations":
@@ -147,6 +176,19 @@ class Regulations(_Config):
 
     def era_of(self, season: int) -> Era:
         return next(era for era in self.eras if season in era.seasons)
+
+    def rules(self, season: int, round_: int) -> RaceRules:
+        rule = next(
+            (r for r in self.race_rules if (r.season, r.round) == (season, round_)),
+            RaceRule(season=season, round=round_),
+        )
+        era = self.era_of(season)
+        return RaceRules(
+            min_dry_compounds=era.min_dry_compounds,
+            red_flag_free_tyre_change=era.red_flag_free_tyre_change,
+            min_stops=rule.min_stops or 0,
+            max_stint_laps=rule.max_stint_laps,
+        )
 
 
 class RaceAllocation(_Config):

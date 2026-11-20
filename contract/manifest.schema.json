@@ -15,6 +15,16 @@
         "path": {
           "type": "string"
         },
+        "sim_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "dataset_version": {
           "type": "string"
         }
@@ -24,6 +34,7 @@
         "round",
         "name",
         "path",
+        "sim_path",
         "dataset_version"
       ],
       "title": "RaceEntry",
@@ -33,7 +44,7 @@
   "additionalProperties": false,
   "properties": {
     "schema_version": {
-      "const": "0.1.0",
+      "const": "0.2.0",
       "type": "string"
     },
     "git_sha": {

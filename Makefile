@@ -1,4 +1,4 @@
-.PHONY: setup verify verify-pipeline verify-web contract contract-check ingest fit backtest fit-events validate-events fit-traffic validate-traffic export build dev
+.PHONY: setup verify verify-pipeline verify-web bench replay contract contract-check ingest fit backtest fit-events validate-events fit-traffic validate-traffic export build dev
 
 PY := cd pipeline && uv run --frozen
 WEB := cd web && npm run -s
@@ -8,7 +8,7 @@ setup:
 	cd web && npm ci
 
 # The one command CI runs. Green here means green in CI.
-verify: verify-pipeline verify-web contract-check
+verify: verify-pipeline verify-web bench contract-check
 
 verify-pipeline:
 	$(PY) ruff check .
@@ -20,6 +20,17 @@ verify-web:
 	$(WEB) typecheck
 	$(WEB) lint
 	$(WEB) test
+
+NODE := node --disable-warning=ExperimentalWarning
+
+# Engine speed against config/budgets.yaml. The engine runs unbundled under Node, as CI validation will.
+bench:
+	@args=$$($(PY) python -c "import yaml; b = yaml.safe_load(open('../config/budgets.yaml'))['sim_benchmark']; print(b['races'], b['laps'], b['cars'], b['max_seconds'])") && \
+	cd web && $(NODE) scripts/bench.ts $$args
+
+# Zero-noise replay of every simulable race in the exported bundle (needs `make export`).
+replay:
+	cd web && $(NODE) scripts/replay.ts
 
 # Regenerate JSON Schema and TypeScript types after editing pipeline/src/pitwall/export/contract.py.
 contract:

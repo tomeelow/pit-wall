@@ -1,9 +1,10 @@
 import type { Manifest } from "../contract/manifest";
 import type { Race } from "../contract/race";
+import type { SimRace } from "../contract/sim";
 
 // Typed as the generated literal: when the pipeline bumps SCHEMA_VERSION, tsc fails here until
 // the app has been checked against the new contract.
-export const SUPPORTED_SCHEMA: Manifest["schema_version"] = "0.1.0";
+export const SUPPORTED_SCHEMA: Manifest["schema_version"] = "0.2.0";
 
 const major = (version: string) => version.split(".")[0];
 
@@ -25,3 +26,4 @@ async function fetchBundleFile<T extends { schema_version: string }>(path: strin
 
 export const loadManifest = () => fetchBundleFile<Manifest>("manifest.json");
 export const loadRace = (path: string) => fetchBundleFile<Race>(path);
+export const loadSim = (path: string) => fetchBundleFile<SimRace>(path);

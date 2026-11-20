@@ -26,7 +26,7 @@ Update this table as phases land. It is the first thing to read when picking up 
 | 3 — Tyre degradation model | ☑ done | Both era fits pass the gate; draws per race in `.data`. LORO: model beats the flat-median baseline only modestly (MAE 0.725 vs 0.758 s); details and the weak-OLS caveat under Phase 3 → Findings |
 | 4 — Pit loss, SC/VSC, reliability | ☑ done | Pit loss per track (green 19–28 s; SC/VSC factors per era: 0.68/0.84× in 2023–25, ~0.95× in 2026), SC/VSC/red/DNF rates per race with that race masked out; per-track rates barely beat era-wide. 2026 rebuilt with VSCs. Phase 4 → Findings |
 | 5 — Traffic & overtaking | ☑ done | Dirty air only matters within 0.5 s (0.47 s/lap); pass model (gap, pace delta, within 1 s, track) beats the gap-only baseline out of sample (log loss 0.134 vs 0.173) and is well calibrated 1–70 %; under-predicts passes from 1.5–3 s back. Phase 5 → Findings |
-| 6 — Simulation engine | ☐ not started | |
+| 6 — Simulation engine | ☑ done | Seeded TS engine with CRN, worker pool and contract 0.2.0 sim inputs for 76/90 races; 10 000 × 60 × 20 in 1.5 s on one thread (CI budget 6 s); zero-noise replay misses the result by 1.24 positions vs 2.33 for the lap-1 order. Open-loop stops under sampled SCs fatten ex-ante tails — Phase 7's first question. Phase 6 → Findings |
 | 7 — Simulator validation | ☐ not started | |
 | 8 — Strategy optimiser, counterfactuals, undercut | ☐ not started | |
 | 9 — Strategy lab UI | ☐ not started | |
@@ -730,6 +730,140 @@ fails the job.
   only increase; retired cars never re-enter; regulation check holds.
 
 **Deliverable:** engine + worker pool + Node benchmark + test suite.
+
+### Findings (first build, 2023 R1 – 2026 R20)
+
+**Inputs.** `make export` now writes `races/{season}/{round}.sim.json` (contract `SimRace`, schema
+0.2.0) next to each race file. The manifest's `sim_path` is null for a race the engine cannot run.
+Each file holds:
+- 200 paired draws of the degradation, event and traffic models;
+- the actual strategies;
+- the race state after every lap;
+- the realised neutralisations;
+- the race's rules.
+
+Code: `pitwall.export.sim`.
+
+About 200 KB per race, 15 MB for all of them. The browser loads one at a time; budgets come in
+Phase 10.
+
+**76 of 90 races are simulable.** The 14 that are not:
+
+| Reason | Races |
+|---|---|
+| Wet running (no model covers intermediates or wets) | 10 |
+| C6, which the degradation fit does not cover (2025 R8, R10) | 2 |
+| No degradation draws (2024 R21) | 1 |
+| A car on an unknown tyre mid-race (2026 R19) | 1 |
+
+**Two fallbacks:**
+- A driver without a clean lap (an early retirement) gets the field-median pace of each draw,
+  flagged `pace_from: "field"`.
+- An unknown tyre on lap 1 is ignored, because simulations start after lap 1.
+
+**Rules come from `config/regulations.yaml`, with sources:**
+- two dry compounds per era;
+- Monaco 2025/26: at least two stops;
+- Qatar 2023: 18-lap stints. Qatar 2025: 25-lap stints;
+- tyre changes under a red flag are free.
+
+A strategy that breaks a rule is disqualified. No actual strategy in the 76 races breaks one.
+
+**The engine's two physical constants are measured,** in `config/pipeline.yaml` → `sim`:
+- Follow gap 0.2 s: the closest a car stuck behind another crosses the line (5th percentile).
+- Restart gap 0.5 s: the median interval when a safety car ends.
+
+**Engine** (`web/src/sim/`).
+
+The code:
+- `prepare` turns a race and a start lap into the start state and checks every plan.
+- `simulateRace` runs one race on typed arrays, with no allocation in the lap loop.
+- `runSimulations` is the Monte Carlo loop. Simulation i uses posterior draw i mod 200.
+- `SimPool` (`web/src/worker/`) splits runs across `hardwareConcurrency − 1` workers and merges
+  them back in run order.
+
+Each lap:
+1. A neutralisation may start.
+2. Each car gets its free-air lap time and Student-t noise (none under a neutralisation), plus the
+   pit loss on its in-lap.
+3. Cars resolve against the one directly ahead in start-of-lap order:
+   - dirty air applies within 3 s;
+   - the pass model decides whether the car gets by;
+   - a car that does not get by crosses at least 0.2 s behind.
+4. Retirements are sampled.
+5. When a safety car or red flag ends, the field closes to the restart gap.
+
+**Common random numbers.** Every random number is drawn before a simulation runs and tied to a
+car and lap, or to a lap: lap noise, pass, retirement and stop-time uniforms per car and lap, and
+event and duration uniforms per lap. Simulation i therefore sees the same numbers under every
+strategy and every split across workers. Tests check this.
+
+**Modes:**
+- `sampled`: ex ante. Neutralisations and retirements are drawn from their rates.
+- `realised`: ex post and replays. They happen when they did.
+- Without noise: no lap noise, the median stop time, and a pass when P > 0.5.
+
+A neutralisation running at the start lap is known, but its end is not: the remaining length is
+drawn from the observed durations longer than the time already run.
+
+**Simplifications:**
+- Simulations start after lap 1; there is no start model.
+- Lapped traffic and blue flags are ignored.
+- The field closes up at the restart, not lap by lap.
+- A red flag runs like a safety car plus a free tyre change.
+- Retirements are independent of neutralisations.
+- Stops without a tyre change are not modelled.
+- There is no defending cost.
+
+**Speed:** 10,000 races × 60 laps × 20 cars in 1.5 s on one thread (Apple silicon), about 6,500
+races/s, about the same on real races.
+- `make bench` (part of `make verify`) fails above 6 s, from `config/budgets.yaml`.
+- The engine runs unbundled under Node 24 through type stripping: `.ts` imports and
+  `erasableSyntaxOnly`.
+- The scripts declare the few Node globals they use instead of adding `@types/node`. Phase 7's
+  backtest may justify the dependency; that needs a decision.
+
+**Tests:**
+- seeded RNG moments;
+- determinism;
+- common random numbers, and identical results from chunked and pooled runs;
+- invariants over 40 random races and strategies:
+  - positions are a permutation each lap;
+  - tyre age resets to the fitted set's age on a stop and otherwise rises by one;
+  - stops only increase;
+  - retired cars never return;
+  - the rule check holds;
+- rule disqualifications and plan validation;
+- mechanics:
+  - pit loss is exact, scaled under a safety car and free under a red flag;
+  - safety-car compression;
+  - pass frequency matches the pass model;
+  - neutralisation and retirement rates match the inputs;
+  - an ongoing neutralisation is handled at the start lap;
+- exporter tests in the pipeline.
+
+**Zero-noise replay** (`make replay`). Each race uses the actual strategies, realised events,
+posterior-mean parameters and no noise, starting after lap 1.
+
+| | Replay | Order after lap 1 |
+|---|---|---|
+| Mean position error, 1,360 finishers in 76 races | 1.24 | 2.33 |
+| Finishers in exactly the right place | 39 % | — |
+| Races where the replay is closer | 65 (9 worse, 2 tied) | — |
+
+The median race is off by 1.20 positions. The worst races are Austria 2024 (2.80; the Verstappen
+and Norris collision), Singapore 2025 (2.70) and Baku 2026 (2.63). Free red-flag tyre changes took
+Monaco 2026 from 4.88 to 2.00. This checks the mechanics only; it is not predictive skill.
+
+**What Phase 7 must look at first: open-loop strategies under sampled safety cars.**
+- Example: in ex ante runs of Monza 2025 from lap 30, Norris (second in reality) finishes 10th or
+  worse in about 10 % of runs.
+- Cause: a sampled safety car closes up the field, then his planned green-flag stop on lap 46 costs
+  the full pit loss. A real team would have stopped under the safety car.
+- With realised events the tail disappears (94 % P2).
+- It widens every ex ante distribution in which a safety car is sampled before a planned stop.
+- Making strategies react, such as pitting under a safety car inside the stop window, changes the
+  open-loop assumption (ADR-004), so it needs a decision.
 
 ---
 

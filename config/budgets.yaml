@@ -1,0 +1,10 @@
+# Budgets enforced by `make verify` (and so by CI).
+
+# Engine speed on one thread, synthetic race. The plan's target is 10 000 races in a few seconds
+# across a browser worker pool. 1.5 s on an Apple-silicon laptop (2026-11); the allowance covers a
+# slower CI runner and fails a several-fold regression.
+sim_benchmark:
+  races: 10000
+  laps: 60
+  cars: 20
+  max_seconds: 6

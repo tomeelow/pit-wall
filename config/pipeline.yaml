@@ -158,3 +158,16 @@ traffic:
   # Leave-one-season-out validation. 2026 is not held out: its era terms would be prior only.
   validation_seasons: [2023, 2024, 2025]
   reliability_bins: [0.0, 0.01, 0.02, 0.05, 0.1, 0.2, 0.3, 0.5, 1.0]
+
+# Simulator inputs exported per race (Phase 6). The engine has no constants of its own.
+sim:
+  # Posterior draws per race: the degradation, event and traffic draws are paired by index.
+  draws: 200
+  # Closest a car stuck behind another crosses the line, s: the 5th percentile of the end-of-lap
+  # gap of cars that started a green lap within 0.5 s and stayed behind (2023 R1 - 2026 R20).
+  follow_gap_s: 0.2
+  # Gap between consecutive cars when a safety car or red flag ends, s: median interval of P2-P10
+  # on the last lap of every safety car (2023 R1 - 2026 R20).
+  restart_gap_s: 0.5
+  # Decimal places of exported draws: enough for lap times in ms, small enough for the browser.
+  decimals: 4

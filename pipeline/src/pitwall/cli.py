@@ -474,7 +474,9 @@ def main() -> None:
         case "validate-traffic":
             validate_traffic(config)
         case "export":
-            export_bundle(config.data_dir, config.bundle_dir, _git_sha())
+            export_bundle(
+                config.data_dir, config.bundle_dir, _git_sha(), config.sim, load_regulations()
+            )
         case "contract":
             for path in write_schemas(args.out):
                 logger.info("wrote {}", path)
