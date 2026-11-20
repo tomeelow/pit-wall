@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  workflow_call:  # by the weekend workflow, after it publishes
 
 permissions:
   contents: read
@@ -28,15 +29,11 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: web/package-lock.json
-      # Raw OpenF1 responses: a finished session is downloaded once, not on every deploy.
-      - uses: actions/cache@v6
-        with:
-          path: .data/openf1-cache.sqlite
-          key: openf1-cache-v1-${{ github.run_id }}
-          restore-keys: openf1-cache-v1-
       - run: make setup
-      # Walking skeleton: one fixed race. Phase 11 replaces this with the season calendar.
-      - run: make ingest SEASON=2024 ROUND=1
+      # The site is rebuilt from the published races (ADR-008), so a code change reaches every race.
+      - run: make data-pull
+        env:
+          GH_TOKEN: ${{ github.token }}
       - run: make export
       - run: make build
       - uses: actions/configure-pages@v6

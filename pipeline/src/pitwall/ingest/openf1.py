@@ -30,11 +30,19 @@ class OpenF1:
     forever and downloaded once; only the season calendar expires, so new races appear."""
 
     def __init__(
-        self, base_url: str, cache_path: Path, calendar_cache_hours: float, min_interval_s: float
+        self,
+        base_url: str,
+        cache_path: Path,
+        calendar_cache_hours: float,
+        min_interval_s: float,
+        refresh: bool = False,
     ) -> None:
+        """refresh: download again and update the cache, for a race whose results may have been
+        amended since it was cached."""
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         self._base_url = base_url.rstrip("/")
         self._min_interval_s = min_interval_s
+        self._refresh = refresh
         calendar = f"{self._base_url.split('://', 1)[-1]}/sessions"
         self._session = CachedSession(
             str(cache_path),
@@ -51,7 +59,12 @@ class OpenF1:
         self._session.mount("https://", HTTPAdapter(max_retries=retry))
 
     def get(self, endpoint: str, **params: int | str) -> Records:
-        response = self._session.get(f"{self._base_url}/{endpoint}", params=params, timeout=60)
+        response = self._session.get(
+            f"{self._base_url}/{endpoint}",
+            params=params,
+            timeout=60,
+            force_refresh=self._refresh,
+        )
         if not response.from_cache:
             time.sleep(self._min_interval_s)
         # OpenF1 answers an empty result set with 404 rather than [].

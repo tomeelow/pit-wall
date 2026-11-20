@@ -31,7 +31,7 @@ Update this table as phases land. It is the first thing to read when picking up 
 | 8 — Strategy optimiser, counterfactuals, undercut | ☑ done | Counterfactual, optimiser (successive halving, recovers a known optimum), undercut and debrief in `web/src/sim`; tyre warm-up fitted (≤ 0.64 s, barely moves calibration). Undercut beats the base rate on 181 real pairs (Brier 0.185 vs 0.205). Full search 4 s on one thread. Debrief prefers later stops (open-loop rivals, linear wear). Phase 8 → Findings |
 | 9 — Strategy lab UI | ☑ done | Rim theme, dark first (light on request). Race, What if, Optimise, Undercut and Model card screens, all simulation on the worker pool, view kept in the URL; editor rule check mirrors the engine's DSQ test. Calibration is shown per segment: no per-track scores are exported yet. Phase 9 → Findings |
 | 10 — Analytics: replay, telemetry, debrief | ☑ done | Replay, Telemetry and Debrief screens. Fastest-lap car data and one lap of location per race (ADR-007) instead of full-race traces; cars placed on the replay by official lap times. Debrief runs on demand in the browser, ex ante and ex post in separate tables. `pitwall export` fails over the budgets in `config/budgets.yaml`. Phase 10 → Findings |
-| 11 — Post-weekend automation & publishing | ☐ not started | |
+| 11 — Post-weekend automation & publishing | ☑ done | `weekend` workflow (Mon and Wed 06:00 UTC, or by hand) runs `make weekend PUBLISH=1`: new races, the previous race again, refit, gates, export, upload. GitHub Releases store the races and models and every deploy rebuilds from them (ADR-008). A failed gate keeps the previous parameters live. Phase 11 → Findings |
 | 12 — Docs & polish | ☐ not started | |
 
 **Build order note:** Phase 0 ends with a *walking skeleton* — one race ingested, a trivial
@@ -1294,6 +1294,29 @@ release → rebuild and deploy Pages.
 
 **Deliverable:** a weekend workflow that runs end to end on GitHub runners; every step also runnable
 locally via `make`.
+
+### Findings
+
+- **The store holds data, not bundles** ([ADR-008](adr/008-releases-store-pipeline-data.md)).
+  Releases `data-2023` … `data-2026` hold each race's tables, traces and parameters (90 races,
+  46 MB), and `models` the fitted models. The deploy pulls them and exports the bundle itself
+  (about 15 s), so a code or contract change reaches every race without a re-pull. Pull and push
+  round-trip byte for byte; uploads replace assets of the same name.
+- **Calendar from OpenF1, not Jolpica.** A round is finished once its race session ended
+  `min_hours_after_race` ago; the sessions endpoint is already in the cache and OpenF1 is the
+  only source the pipeline ingests.
+- **What changed decides what runs.** The previous race is pulled again with the cache bypassed
+  and compared by dataset fingerprint. With nothing new or amended, nothing refits or uploads: a
+  run after São Paulo 2026 with no amendment took 82 s and published nothing.
+- **Refit cost.** On a 10-core laptop: degradation 19 min (2023-2025 era 15 min, 2026 5 min),
+  events 6 min, traffic 1 min, warm-up 4 s; the calibration backtest 1 min. The job allows 5 hours
+  for slower runners.
+- **Draws are not bit-reproducible.** A refit on unchanged data with the same seeds gives
+  different draws; the cause (nutpie's threaded chains is the likely one) is not pinned down.
+  Posterior medians move by a small fraction of a posterior sd, and the calibration segments the
+  README quotes are unchanged to the percent. The dataset hash is
+  reproducible; the parameters are reproducible only in distribution.
+- **Not yet:** the debrief for the whole field runs in the browser on demand, not in the workflow.
 
 ---
 

@@ -1,4 +1,4 @@
-.PHONY: setup verify verify-pipeline verify-web bench replay validate-sim undercut-check debrief contract contract-check ingest ingest-traces fit backtest fit-events validate-events fit-traffic validate-traffic fit-warmup export build dev
+.PHONY: setup verify verify-pipeline verify-web bench replay validate-sim undercut-check debrief contract contract-check ingest ingest-traces fit backtest fit-events validate-events fit-traffic validate-traffic fit-warmup export weekend data-pull data-push build dev
 
 PY := cd pipeline && uv run --frozen
 WEB := cd web && npm run -s
@@ -103,6 +103,19 @@ validate-traffic:
 
 export:
 	$(PY) pitwall export
+
+# The post-weekend run (ADR-008): new races of SEASON (default this year) and the last one again,
+# refit, gates, export. ROUND= pulls one round; PUBLISH=1 uploads what changed to GitHub Releases.
+weekend:
+	$(PY) pitwall weekend $(if $(SEASON),--season $(SEASON)) $(if $(ROUND),--round $(ROUND)) $(if $(PUBLISH),--publish)
+
+# The published races and models from GitHub Releases into .data (replaces local copies).
+data-pull:
+	$(PY) pitwall data-pull
+
+# Upload every stored race and the models to GitHub Releases: seeding the store only.
+data-push:
+	$(PY) pitwall data-push
 
 build:
 	$(WEB) build
