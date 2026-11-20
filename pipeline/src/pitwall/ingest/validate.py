@@ -12,9 +12,13 @@ import pandas as pd
 import pandera.pandas as pa
 from pydantic import BaseModel
 
-from pitwall.config import RaceAllocation, ValidationConfig
+from pitwall.config import ClassificationConfig, RaceAllocation, ValidationConfig
 from pitwall.ingest.openf1 import COMPOUNDS, UNKNOWN_COMPOUND
 from pitwall.ingest.storage import RaceTables
+from pitwall.laps import LAP_CLASSES, TRACK_STATUSES
+from pitwall.race_state import position_agreement
+
+UTC = "datetime64[ns, UTC]"
 
 LAPS = pa.DataFrameSchema(
     {
@@ -24,6 +28,7 @@ LAPS = pa.DataFrameSchema(
         "team": pa.Column(str),
         "team_id": pa.Column("string", nullable=False),
         "lap": pa.Column("int64", pa.Check.ge(1)),
+        "lap_start_utc": pa.Column(UTC, nullable=True),
         "lap_time_s": pa.Column("float64", pa.Check.gt(0), nullable=True),
         "compound": pa.Column(str, pa.Check.isin([*COMPOUNDS, UNKNOWN_COMPOUND])),
         "compound_c": pa.Column("Int64", pa.Check.in_range(0, 6), nullable=True),
@@ -66,8 +71,8 @@ NEUTRALISATIONS = pa.DataFrameSchema(
         "kind": pa.Column(str, pa.Check.isin(["SC", "VSC", "RED"])),
         "start_lap": pa.Column("int64", pa.Check.ge(0)),
         "end_lap": pa.Column("int64", pa.Check.ge(0)),
-        "start_utc": pa.Column("datetime64[ns, UTC]"),
-        "end_utc": pa.Column("datetime64[ns, UTC]"),
+        "start_utc": pa.Column(UTC),
+        "end_utc": pa.Column(UTC),
         "ended_by": pa.Column(str),
     },
     checks=[
@@ -76,6 +81,59 @@ NEUTRALISATIONS = pa.DataFrameSchema(
     ],
     strict=True,
     name="neutralisations",
+)
+
+
+YELLOWS = pa.DataFrameSchema(
+    {
+        "sector": pa.Column("int64", pa.Check.ge(1)),
+        "start_utc": pa.Column(UTC),
+        "end_utc": pa.Column(UTC),
+    },
+    checks=[pa.Check(lambda df: df["end_utc"] >= df["start_utc"], error="ends before it starts")],
+    strict=True,
+    name="yellows",
+)
+
+POSITIONS = pa.DataFrameSchema(
+    {
+        "driver": pa.Column("string"),
+        "utc": pa.Column(UTC),
+        "position": pa.Column("int64", pa.Check.ge(1)),
+    },
+    strict=True,
+    name="positions",
+)
+
+CLASSIFIED_LAPS = LAPS.add_columns(
+    {
+        "track_status": pa.Column(str, pa.Check.isin(TRACK_STATUSES)),
+        "lap_class": pa.Column(str, pa.Check.isin(LAP_CLASSES)),
+    }
+).set_name("laps")
+
+RACE_STATE = pa.DataFrameSchema(
+    {
+        "driver": pa.Column(str),
+        "lap": pa.Column("int64", pa.Check.ge(1)),
+        "crossing_utc": pa.Column(UTC, nullable=True),
+        "race_time_s": pa.Column("float64", nullable=True),
+        "position": pa.Column("Int64", pa.Check.ge(1), nullable=True),
+        "gap_to_leader_s": pa.Column("float64", pa.Check.ge(0), nullable=True),
+        "interval_s": pa.Column("float64", pa.Check.ge(0), nullable=True),
+        "gap_ahead_s": pa.Column("float64", pa.Check.ge(0), nullable=True),
+        "stint": pa.Column("Int64", pa.Check.ge(1)),
+        "compound": pa.Column(str),
+        "compound_c": pa.Column("Int64", nullable=True),
+        "tyre_age": pa.Column("Int64", nullable=True),
+        "stops": pa.Column("Int64", pa.Check.ge(0)),
+        "in_pit": pa.Column(bool),
+        "dry_compounds_used": pa.Column(str),
+        "retired": pa.Column(bool),
+    },
+    unique=["driver", "lap"],
+    strict=True,
+    name="race_state",
 )
 
 
@@ -90,6 +148,8 @@ class RaceReport(BaseModel):
     neutralisations: int
     errors: list[str]
     warnings: list[str]
+    position_agreement: float | None = None
+    lap_classes: dict[str, int] = {}
 
 
 def _schema_errors(schema: pa.DataFrameSchema, frame: pd.DataFrame) -> list[str]:
@@ -190,6 +250,8 @@ def validate_race(
         *_schema_errors(RESULTS, tables.results),
         *_schema_errors(PITS, tables.pits),
         *_schema_errors(NEUTRALISATIONS, tables.neutralisations),
+        *_schema_errors(YELLOWS, tables.yellows),
+        *_schema_errors(POSITIONS, tables.positions),
     ]
     if allocation is not None and allocation.race != event.name:
         errors.append(
@@ -222,6 +284,43 @@ def validate_race(
         neutralisations=len(tables.neutralisations),
         errors=errors,
         warnings=warnings,
+    )
+
+
+def check_prepared(
+    tables: RaceTables,
+    report: RaceReport,
+    config: ValidationConfig,
+    classification: ClassificationConfig,
+) -> RaceReport:
+    """Validate the derived tables and check the race state against OpenF1's position feed."""
+    errors = _schema_errors(CLASSIFIED_LAPS, tables.laps) + _schema_errors(
+        RACE_STATE, tables.race_state
+    )
+    agreement = position_agreement(tables.race_state, tables.positions, config.position_lag_s)
+    warnings = []
+    if agreement is None:
+        warnings.append("no OpenF1 position feed; race-state order unchecked")
+    elif agreement < config.min_position_agreement:
+        warnings.append(
+            f"race-state order matches the position feed on only {agreement:.1%} of driver-laps"
+        )
+    yellow_s = (tables.yellows["end_utc"] - tables.yellows["start_utc"]).dt.total_seconds()
+    capped = tables.yellows["sector"][yellow_s > classification.max_yellow_s].tolist()
+    if capped:
+        warnings.append(
+            f"sector yellows longer than {classification.max_yellow_s:.0f}s (not cleared in "
+            f"race control?) counted only for that long: sectors {capped}"
+        )
+    counts = tables.laps["lap_class"].value_counts()
+    return report.model_copy(
+        update={
+            "dataset_version": tables.fingerprint(),
+            "errors": report.errors + errors,
+            "warnings": report.warnings + warnings,
+            "position_agreement": None if agreement is None else round(agreement, 4),
+            "lap_classes": {c: int(counts.get(c, 0)) for c in LAP_CLASSES},
+        }
     )
 
 
