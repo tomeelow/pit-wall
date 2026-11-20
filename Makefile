@@ -36,9 +36,10 @@ contract-check:
 	if [ $$status -ne 0 ]; then echo "contract is stale: run 'make contract'"; exit 1; fi; \
 	echo "contract up to date"
 
+# One race with ROUND, otherwise every finished race of SEASON.
 ingest:
-	@test -n "$(SEASON)" -a -n "$(ROUND)" || { echo "usage: make ingest SEASON=2024 ROUND=1"; exit 2; }
-	$(PY) pitwall ingest --season $(SEASON) --round $(ROUND)
+	@test -n "$(SEASON)" || { echo "usage: make ingest SEASON=2024 [ROUND=1]"; exit 2; }
+	$(PY) pitwall ingest --season $(SEASON) $(if $(ROUND),--round $(ROUND))
 
 export:
 	$(PY) pitwall export

@@ -3,3 +3,13 @@ data_dir: .data               # raw API cache and canonical parquet tables (giti
 bundle_dir: web/public/data   # exported static bundle served by the web app (gitignored)
 
 openf1_url: https://api.openf1.org/v1
+# The season calendar changes as races finish; every other response is final and cached forever.
+calendar_cache_hours: 6
+# A race counts as finished (and is ingested by a season run) this long after its scheduled end.
+min_hours_after_race: 12
+
+validation:
+  # Lap times outside [min, max] x the race's median lap time are reported. Slow laps are normal
+  # (SC, pit, red flag); the bounds only catch timing garbage.
+  lap_time_min_factor: 0.9
+  lap_time_max_factor: 5.0

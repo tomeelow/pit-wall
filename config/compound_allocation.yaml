@@ -1,0 +1,159 @@
+# Pirelli dry-compound nominations per race, as C-numbers (C0 hardest ... C6 softest).
+#
+# Source of truth: Pirelli's published allocations (press releases), cited per season under
+# `sources`. Never fill or edit entries from memory (CLAUDE.md). `race` must match the OpenF1
+# meeting name for that round: a mismatch fails validation, which catches round misalignment.
+#
+# <season>:
+#   sources: [<url>, ...]
+#   races:
+#     - {round: 1, race: Bahrain Grand Prix, hard: 1, medium: 2, soft: 3}
+
+2023:
+  sources:
+    # Rounds 1-2: the 2024 opener release states Bahrain (C1-C3) and Jeddah (C2-C4) keep 2023's tyres.
+    - https://press.pirelli.com/pirelli-nominates-the-compounds-for-the-start-of-2024/
+    - https://press.pirelli.com/2023-australian-grand-prix---preview/
+    - https://press.pirelli.com/2023-tyre-compound-choices--azerbaijan-usa-and-italy/
+    - https://press.pirelli.com/2023-tyre-compound-choices--monaco-and-spain/
+    - https://press.pirelli.com/2023-tyre-compound-choices--canada-austria-and-great-britain/
+    - https://press.pirelli.com/tyre-news-and-nominations-for-hungary-and-belgium/
+    - https://press.pirelli.com/news-and-tyre-choices-for-zandvoort-and-monza/
+    - https://press.pirelli.com/unchanged-nominations-for-singapore-japan-and-qatar--in-name-at-least/
+    - https://press.pirelli.com/two-confirmations-and-an-innovation-in-the-tyre-choices-for-the-american-continent/
+    - https://press.pirelli.com/a-soft-landing-for-the-2023-world-championship/
+  races:
+    - {round: 1, race: Bahrain Grand Prix, hard: 1, medium: 2, soft: 3}
+    - {round: 2, race: Saudi Arabian Grand Prix, hard: 2, medium: 3, soft: 4}
+    - {round: 3, race: Australian Grand Prix, hard: 2, medium: 3, soft: 4}
+    - {round: 4, race: Azerbaijan Grand Prix, hard: 3, medium: 4, soft: 5}
+    - {round: 5, race: Miami Grand Prix, hard: 2, medium: 3, soft: 4}
+    - {round: 6, race: Monaco Grand Prix, hard: 3, medium: 4, soft: 5}
+    - {round: 7, race: Spanish Grand Prix, hard: 1, medium: 2, soft: 3}
+    - {round: 8, race: Canadian Grand Prix, hard: 3, medium: 4, soft: 5}
+    - {round: 9, race: Austrian Grand Prix, hard: 3, medium: 4, soft: 5}
+    - {round: 10, race: British Grand Prix, hard: 1, medium: 2, soft: 3}
+    - {round: 11, race: Hungarian Grand Prix, hard: 3, medium: 4, soft: 5}
+    - {round: 12, race: Belgian Grand Prix, hard: 2, medium: 3, soft: 4}
+    - {round: 13, race: Dutch Grand Prix, hard: 1, medium: 2, soft: 3}
+    - {round: 14, race: Italian Grand Prix, hard: 3, medium: 4, soft: 5}
+    - {round: 15, race: Singapore Grand Prix, hard: 3, medium: 4, soft: 5}
+    - {round: 16, race: Japanese Grand Prix, hard: 1, medium: 2, soft: 3}
+    - {round: 17, race: Qatar Grand Prix, hard: 1, medium: 2, soft: 3}
+    - {round: 18, race: United States Grand Prix, hard: 2, medium: 3, soft: 4}
+    - {round: 19, race: Mexico City Grand Prix, hard: 3, medium: 4, soft: 5}
+    - {round: 20, race: São Paulo Grand Prix, hard: 2, medium: 3, soft: 4}
+    - {round: 21, race: Las Vegas Grand Prix, hard: 3, medium: 4, soft: 5}
+    - {round: 22, race: Abu Dhabi Grand Prix, hard: 3, medium: 4, soft: 5}
+
+2024:
+  sources:
+    - https://press.pirelli.com/pirelli-nominates-the-compounds-for-the-start-of-2024/
+    - https://press.pirelli.com/these-are-the-p-zero-compounds-for-suzuka-shanghai-and-miami/
+    - https://press.pirelli.com/same-soft-trio-for-imola-monaco-and-montreal/
+    - https://press.pirelli.com/no-surprises-for-the-compounds-for-spain-austria-and-great-britain/
+    - https://press.pirelli.com/all-compounds-on-track-over-next-three-races/
+    - https://press.pirelli.com/a-soft-september-for-pirelli-in-f1-compounds-confirmed-for-monza-baku-and-singapore/
+    - https://press.pirelli.com/these-are-the-tyres-for-the-americas/
+    - https://press.pirelli.com/all-compounds-on-track-to-end-the-season/
+  races:
+    - {round: 1, race: Bahrain Grand Prix, hard: 1, medium: 2, soft: 3}
+    - {round: 2, race: Saudi Arabian Grand Prix, hard: 2, medium: 3, soft: 4}
+    - {round: 3, race: Australian Grand Prix, hard: 3, medium: 4, soft: 5}
+    - {round: 4, race: Japanese Grand Prix, hard: 1, medium: 2, soft: 3}
+    - {round: 5, race: Chinese Grand Prix, hard: 2, medium: 3, soft: 4}
+    - {round: 6, race: Miami Grand Prix, hard: 2, medium: 3, soft: 4}
+    - {round: 7, race: Emilia Romagna Grand Prix, hard: 3, medium: 4, soft: 5}
+    - {round: 8, race: Monaco Grand Prix, hard: 3, medium: 4, soft: 5}
+    - {round: 9, race: Canadian Grand Prix, hard: 3, medium: 4, soft: 5}
+    - {round: 10, race: Spanish Grand Prix, hard: 1, medium: 2, soft: 3}
+    - {round: 11, race: Austrian Grand Prix, hard: 3, medium: 4, soft: 5}
+    - {round: 12, race: British Grand Prix, hard: 1, medium: 2, soft: 3}
+    - {round: 13, race: Hungarian Grand Prix, hard: 3, medium: 4, soft: 5}
+    - {round: 14, race: Belgian Grand Prix, hard: 2, medium: 3, soft: 4}
+    - {round: 15, race: Dutch Grand Prix, hard: 1, medium: 2, soft: 3}
+    - {round: 16, race: Italian Grand Prix, hard: 3, medium: 4, soft: 5}
+    - {round: 17, race: Azerbaijan Grand Prix, hard: 3, medium: 4, soft: 5}
+    - {round: 18, race: Singapore Grand Prix, hard: 3, medium: 4, soft: 5}
+    - {round: 19, race: United States Grand Prix, hard: 2, medium: 3, soft: 4}
+    - {round: 20, race: Mexico City Grand Prix, hard: 3, medium: 4, soft: 5}
+    - {round: 21, race: São Paulo Grand Prix, hard: 3, medium: 4, soft: 5}
+    - {round: 22, race: Las Vegas Grand Prix, hard: 3, medium: 4, soft: 5}
+    - {round: 23, race: Qatar Grand Prix, hard: 1, medium: 2, soft: 3}
+    - {round: 24, race: Abu Dhabi Grand Prix, hard: 3, medium: 4, soft: 5}
+
+2025:
+  sources:
+    - https://press.pirelli.com/under-starters-orders-in-melbourne-and-something-new-on-the-podium/
+    - https://press.pirelli.com/a-chinese-weekend-that-presents-many-challenges-as-well-as-something-new/
+    - https://press.pirelli.com/to-suzuka-for-something-new-and-something-old/
+    - https://press.pirelli.com/in-bahrain-with-prior-knowledge/
+    - https://press.pirelli.com/a-softer-approach-for-jeddah/
+    - https://press.pirelli.com/pirelli-on-the-soft-side-for-miami-and-imola/
+    - https://press.pirelli.com/from-monaco-to-montreal-all-the-compounds-in-play/
+    - https://press.pirelli.com/both-new-and-familiar-for-spielberg-to-budapest/
+    - https://press.pirelli.com/changes-and-status-quo-when-it-comes-to-compound-choices-for-the-rest-of-the-season0/
+  races:
+    - {round: 1, race: Australian Grand Prix, hard: 3, medium: 4, soft: 5}
+    - {round: 2, race: Chinese Grand Prix, hard: 2, medium: 3, soft: 4}
+    - {round: 3, race: Japanese Grand Prix, hard: 1, medium: 2, soft: 3}
+    - {round: 4, race: Bahrain Grand Prix, hard: 1, medium: 2, soft: 3}
+    - {round: 5, race: Saudi Arabian Grand Prix, hard: 3, medium: 4, soft: 5}
+    - {round: 6, race: Miami Grand Prix, hard: 3, medium: 4, soft: 5}
+    - {round: 7, race: Emilia Romagna Grand Prix, hard: 4, medium: 5, soft: 6}
+    - {round: 8, race: Monaco Grand Prix, hard: 4, medium: 5, soft: 6}
+    - {round: 9, race: Spanish Grand Prix, hard: 1, medium: 2, soft: 3}
+    - {round: 10, race: Canadian Grand Prix, hard: 4, medium: 5, soft: 6}
+    - {round: 11, race: Austrian Grand Prix, hard: 3, medium: 4, soft: 5}
+    - {round: 12, race: British Grand Prix, hard: 2, medium: 3, soft: 4}
+    # Skipped steps: Spa, Austin and Mexico City leave a gap between hard and medium.
+    - {round: 13, race: Belgian Grand Prix, hard: 1, medium: 3, soft: 4}
+    - {round: 14, race: Hungarian Grand Prix, hard: 3, medium: 4, soft: 5}
+    - {round: 15, race: Dutch Grand Prix, hard: 2, medium: 3, soft: 4}
+    - {round: 16, race: Italian Grand Prix, hard: 3, medium: 4, soft: 5}
+    - {round: 17, race: Azerbaijan Grand Prix, hard: 4, medium: 5, soft: 6}
+    - {round: 18, race: Singapore Grand Prix, hard: 3, medium: 4, soft: 5}
+    - {round: 19, race: United States Grand Prix, hard: 1, medium: 3, soft: 4}
+    - {round: 20, race: Mexico City Grand Prix, hard: 2, medium: 4, soft: 5}
+    - {round: 21, race: São Paulo Grand Prix, hard: 2, medium: 3, soft: 4}
+    - {round: 22, race: Las Vegas Grand Prix, hard: 3, medium: 4, soft: 5}
+    - {round: 23, race: Qatar Grand Prix, hard: 1, medium: 2, soft: 3}
+    - {round: 24, race: Abu Dhabi Grand Prix, hard: 3, medium: 4, soft: 5}
+
+# 2026 is a new car era with a new compound range; C-numbers are not comparable with 2023-2025.
+2026:
+  sources:
+    - https://press.pirelli.com/complete-f1-tyre-range-for-the-first-three-grands-prix-of-2026/
+    - https://press.pirelli.com/the-softest-trio-for-the-challenges-of-miami-and-montreal/
+    - https://press.pirelli.com/the-tyre-compound-selections-for-monte-carlo-and-barcelona/
+    - https://press.pirelli.com/the-full-pirelli-range-for-spielberg-and-silverstone/
+    - https://press.pirelli.com/the-compounds-selected-for-belgium-and-hungary/
+    - https://press.pirelli.com/tyre-compounds-selected-for-zandvoort-monza-and-madrid/
+    - https://press.pirelli.com/tyre-compound-selections-for-baku-sepang-and-singapore/
+    - https://press.pirelli.com/the-compound-selection-for-austin-mexico-city-and-so-paulo/
+    - https://press.pirelli.com/tyre-compounds-selected-for-the-final-three-races-of-the-season/
+  races:
+    - {round: 1, race: Australian Grand Prix, hard: 3, medium: 4, soft: 5}
+    - {round: 2, race: Chinese Grand Prix, hard: 2, medium: 3, soft: 4}
+    - {round: 3, race: Japanese Grand Prix, hard: 1, medium: 2, soft: 3}
+    - {round: 4, race: Miami Grand Prix, hard: 3, medium: 4, soft: 5}
+    - {round: 5, race: Canadian Grand Prix, hard: 3, medium: 4, soft: 5}
+    - {round: 6, race: Monaco Grand Prix, hard: 3, medium: 4, soft: 5}
+    - {round: 7, race: Barcelona Grand Prix, hard: 2, medium: 3, soft: 4}
+    - {round: 8, race: Austrian Grand Prix, hard: 3, medium: 4, soft: 5}
+    - {round: 9, race: British Grand Prix, hard: 1, medium: 2, soft: 3}
+    - {round: 10, race: Belgian Grand Prix, hard: 2, medium: 3, soft: 4}
+    - {round: 11, race: Hungarian Grand Prix, hard: 3, medium: 4, soft: 5}
+    - {round: 12, race: Dutch Grand Prix, hard: 2, medium: 3, soft: 4}
+    - {round: 13, race: Italian Grand Prix, hard: 3, medium: 4, soft: 5}
+    - {round: 14, race: Spanish Grand Prix, hard: 2, medium: 3, soft: 4}
+    - {round: 15, race: Azerbaijan Grand Prix, hard: 3, medium: 4, soft: 5}
+    # Held at Sepang (Kuala Lumpur) under the Bahrain Grand Prix name.
+    - {round: 16, race: Bahrain Grand Prix, hard: 2, medium: 3, soft: 4}
+    - {round: 17, race: Singapore Grand Prix, hard: 3, medium: 4, soft: 5}
+    - {round: 18, race: United States Grand Prix, hard: 2, medium: 3, soft: 4}
+    - {round: 19, race: Mexico City Grand Prix, hard: 3, medium: 4, soft: 5}
+    - {round: 20, race: São Paulo Grand Prix, hard: 3, medium: 4, soft: 5}
+    - {round: 21, race: Las Vegas Grand Prix, hard: 3, medium: 4, soft: 5}
+    - {round: 22, race: Qatar Grand Prix, hard: 1, medium: 2, soft: 3}
+    - {round: 23, race: Abu Dhabi Grand Prix, hard: 3, medium: 4, soft: 5}
