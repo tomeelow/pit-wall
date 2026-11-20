@@ -1,5 +1,7 @@
 import numpy as np
 import pandas as pd
+import pymc as pm
+import pytensor.tensor as pt
 import pytest
 
 from pitwall.config import GateConfig, SamplerConfig, load_regulations
@@ -8,6 +10,7 @@ from pitwall.models import backtest
 from pitwall.models.degradation import (
     Diagnostics,
     Fit,
+    _zero_sum_deviation,
     drop_sparse_compounds,
     fit,
     race_draws,
@@ -166,3 +169,14 @@ def test_backtest_baselines_on_a_straight_stint(synthetic_fit: Fit) -> None:
         backtest.forecast_stints(
             synthetic_fit.laps, synthetic_fit, CONFIG.degradation.backtest, np.random.default_rng(0)
         )
+
+
+def test_zero_sum_deviations_match_centred_normals() -> None:
+    segment = np.array([0, 1, 0, 2, 0, 1])  # sizes 3, 2 and 1
+    with pm.Model():
+        deviation = _zero_sum_deviation("z", pt.as_tensor(2.0), segment, segments=3)
+    draws = np.asarray(pm.draw(deviation, draws=20_000, random_seed=0))
+    totals = np.stack([draws[:, segment == s].sum(axis=1) for s in range(3)])
+    assert np.abs(totals).max() < 1e-9
+    sizes = np.bincount(segment)[segment]
+    assert draws.var(axis=0) == pytest.approx(4 * (1 - 1 / sizes), abs=0.15)
