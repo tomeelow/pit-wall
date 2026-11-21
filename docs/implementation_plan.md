@@ -1366,7 +1366,7 @@ Decisions on the questions left open by Phases 7, 8 and 3.
 - Calibration is unchanged (it runs the actual strategies, which the cap does not touch).
 
 ### Reactive stops under a safety car: tried, not shipped
-- Built as agreed (draft PR 19): on the first lap of a sampled SC or VSC, every car with a planned
+- Built as agreed (draft PR 20): on the first lap of a sampled SC or VSC, every car with a planned
   stop still to make may take it at once. P = logistic(kind + tyre age + share of race left), per
   era, learnt from the other races, with bootstrap draws. The fit is clear: 67-71 % of such cars
   stop on an SC's first two laps, 23 % under a VSC; +1.2 log-odds per 10 laps of tyre age
