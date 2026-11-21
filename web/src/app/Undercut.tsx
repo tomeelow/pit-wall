@@ -131,7 +131,7 @@ export function Undercut({
         <Assumptions fromLap={run.status === "done" ? run.result.lap - 1 : lap} events={run.status === "done" ? run.result.events : events} />
         <p className="sub note">
           How far to trust this:{" "}
-          <a href="https://github.com/tomeelow/pit-wall#strategy-tools-known-weaknesses">
+          <a href="https://github.com/tomeelow/pit-wall#known-weaknesses-of-the-strategy-tools">
             the undercut check against real pit sequences
           </a>
           .
