@@ -206,8 +206,8 @@ Actions.
 ## What I'd do with more time
 
 - **Reactive opponents.** Rivals keep their real strategies ([ADR-004](docs/adr/004-open-loop-opponents.md)).
-  Letting them cover an undercut or pit under a safety car is the biggest known gap, and the most
-  likely fix for the late-race overconfidence.
+  Letting them cover an undercut is the biggest known gap. Bringing planned stops forward under a
+  sampled safety car was tried and left calibration unchanged, so it is not shipped.
 - **A tyre cliff.** Wear is linear because the residuals show no curvature, even 30+ laps into a
   stint. Teams usually stop before a cliff, so the data may simply not contain one; the strategy
   search stays within the stint lengths raced instead of modelling one.
