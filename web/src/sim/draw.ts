@@ -17,6 +17,10 @@ export interface Draw {
   betaGap: number;
   betaPace: number;
   betaDrs: number;
+  reactSc: number; // safety-car reaction, see Reaction in the contract
+  reactVsc: number;
+  reactAge: number;
+  reactLeft: number;
 }
 
 export function createDraw(prepared: Prepared): Draw {
@@ -34,6 +38,10 @@ export function createDraw(prepared: Prepared): Draw {
     betaGap: 0,
     betaPace: 0,
     betaDrs: 0,
+    reactSc: 0,
+    reactVsc: 0,
+    reactAge: 0,
+    reactLeft: 0,
   };
 }
 
@@ -62,6 +70,13 @@ export function fillDraw(race: SimRace, d: number | "mean", out: Draw): void {
   out.betaGap = at(race.traffic.beta_gap_s);
   out.betaPace = at(race.traffic.beta_pace_delta_s);
   out.betaDrs = at(race.traffic.beta_within_drs);
+  // Without a fitted reaction no car reacts.
+  const react = race.reaction;
+  const none = react.intercept_sc.length === 0;
+  out.reactSc = none ? -Infinity : at(react.intercept_sc);
+  out.reactVsc = none ? -Infinity : at(react.intercept_vsc);
+  out.reactAge = none ? 0 : at(react.tyre_age_per_10);
+  out.reactLeft = none ? 0 : at(react.race_left);
 }
 
 function mean(values: readonly number[]): number {
@@ -82,6 +97,7 @@ export interface Randoms {
   stationary: Float64Array; // per car x lap: uniform, for a stop made on that lap
   event: Float64Array; // per lap: uniform
   duration: Float64Array; // per lap: uniform
+  react: Float64Array; // per car x lap: uniform, for a stop brought forward on that lap
 }
 
 export function createRandoms(prepared: Prepared): Randoms {
@@ -93,12 +109,14 @@ export function createRandoms(prepared: Prepared): Randoms {
     stationary: new Float64Array(perCar),
     event: new Float64Array(prepared.laps + 1),
     duration: new Float64Array(prepared.laps + 1),
+    react: new Float64Array(perCar),
   };
 }
 
 export function fillRandoms(rng: Rng, nu: number, out: Randoms): void {
   for (let k = 0; k < out.lapNoise.length; k++) out.lapNoise[k] = rng.studentT(nu);
-  for (const array of [out.pass, out.dnf, out.stationary, out.event, out.duration]) {
+  // Appended last: adding a stream leaves every earlier number where it was.
+  for (const array of [out.pass, out.dnf, out.stationary, out.event, out.duration, out.react]) {
     for (let k = 0; k < array.length; k++) array[k] = rng.uniform();
   }
 }

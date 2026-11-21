@@ -12,8 +12,8 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 from pydantic.json_schema import GenerateJsonSchema
 
-SchemaVersion = Literal["0.6.0"]
-SCHEMA_VERSION: SchemaVersion = "0.6.0"
+SchemaVersion = Literal["0.7.0"]
+SCHEMA_VERSION: SchemaVersion = "0.7.0"
 
 Compound = Literal["SOFT", "MEDIUM", "HARD", "INTERMEDIATE", "WET", "UNKNOWN"]
 
@@ -196,6 +196,18 @@ class Snapshot(_Contract):
     dry_compounds: list[list[int]]  # C-numbers used so far
 
 
+class Reaction(_Contract):
+    """On the first lap of a sampled SC or VSC (ex ante only), a car with a planned stop still to
+    make takes it at once with P = logistic(intercept_sc or intercept_vsc
+    + tyre_age_per_10 * tyre_age / 10 + race_left * (total_laps - lap) / total_laps), tyre_age
+    counting the lap being driven. Empty lists: no reaction. Per draw."""
+
+    intercept_sc: list[float]
+    intercept_vsc: list[float]
+    tyre_age_per_10: list[float]
+    race_left: list[float]
+
+
 class Neutralisation(_Contract):
     kind: NeutralisationKind
     start_lap: int
@@ -218,6 +230,7 @@ class SimRace(_Contract):
     pit_loss: PitLoss
     neutralisations: list[NeutralisationParams]
     traffic: Traffic
+    reaction: Reaction
     cars: list[Car]
     snapshots: list[Snapshot]  # after laps 1 .. total_laps - 1
     realised: list[Neutralisation]  # what happened: for replays and ex-post views only

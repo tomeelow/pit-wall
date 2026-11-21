@@ -7,6 +7,7 @@ What a race's parameters may learn from (the information-set rule):
 - Random events are not. Stationary times, neutralisation durations and the event rates for a
   race come from every *other* race.
 - Neither is the stint cap: how long stints get on a C-number comes from the era's other races.
+- Nor is the reaction to a safety car or VSC (`reaction`): from the era's other races.
 """
 
 from dataclasses import dataclass
@@ -18,7 +19,7 @@ from pydantic import BaseModel
 
 from pitwall.config import EventsConfig, Regulations, StintCapConfig
 from pitwall.ingest.storage import RaceTables, dataset_fingerprint
-from pitwall.models import hazards, pit_loss
+from pitwall.models import hazards, pit_loss, reaction
 from pitwall.models.degradation import race_id
 from pitwall.models.sampling import Diagnostics
 
@@ -35,6 +36,8 @@ class EventParameters(BaseModel):
     # for any other C-number; None with no other race in the era to learn from.
     max_stint_laps: dict[str, int]
     max_stint_laps_other: int | None
+    # reaction.COLUMNS -> per draw; empty with no other race in the era to learn from.
+    reaction: dict[str, list[float]]
 
 
 def completed_stints(tables: RaceTables) -> pd.DataFrame:
@@ -81,20 +84,24 @@ class History:
     periods: pd.DataFrame  # neutralisations + race
     rows: pd.DataFrame  # hazard rows
     stints: pd.DataFrame  # completed_stints + race, era
-    stint_cap: StintCapConfig
+    reactions: pd.DataFrame  # reaction.reaction_rows + race, era
+    config: EventsConfig
 
     @classmethod
     def of(
         cls, tables: list[RaceTables], config: EventsConfig, regulations: Regulations
     ) -> "History":
         races = {race_id(t.event.season, t.event.round): t for t in tables}
-        stops, paces, periods, rows, stints = [], [], [], [], []
+        stops, paces, periods, rows, stints, reactions = [], [], [], [], [], []
         for race, t in races.items():
             era = regulations.era_of(t.event.season)
             stops.append(pit_loss.stop_losses(t, config.pit_loss).assign(race=race, era=era.name))
             paces.append(pit_loss.neutralised_pace(t).assign(race=race, era=era.name))
             periods.append(t.neutralisations.assign(race=race))
             stints.append(completed_stints(t).assign(race=race, era=era.name))
+            found = reaction.reaction_rows(t, config.reaction.window_laps)
+            if not found.empty:
+                reactions.append(found.assign(race=race, era=era.name))
             rows += [
                 hazards.neutralisation_rows(t, race, era),
                 hazards.retirement_rows(t, race, era),
@@ -107,7 +114,10 @@ class History:
             periods=pd.concat(periods, ignore_index=True),
             rows=pd.concat(rows, ignore_index=True),
             stints=pd.concat(stints, ignore_index=True),
-            stint_cap=config.stint_cap,
+            reactions=pd.concat(reactions, ignore_index=True)
+            if reactions
+            else pd.DataFrame(columns=["kind", "tyre_age", "race_left", "stopped", "race", "era"]),
+            config=config,
         )
 
     def parameters(self, race: str, era: str) -> EventParameters:
@@ -124,7 +134,7 @@ class History:
         durations = periods["end_lap"] - periods["start_lap"] + 1
         caps, other_cap = stint_caps(
             self.stints[(self.stints["race"] != race) & (self.stints["era"] == era)],
-            self.stint_cap,
+            self.config.stint_cap,
         )
         return EventParameters(
             pit_loss_s=round(float(loss), 3),
@@ -148,7 +158,18 @@ class History:
             },
             max_stint_laps=caps,
             max_stint_laps_other=other_cap,
+            reaction=self._reaction(race, era),
         )
+
+    def _reaction(self, race: str, era: str) -> dict[str, list[float]]:
+        rows = self.reactions[(self.reactions["race"] != race) & (self.reactions["era"] == era)]
+        if rows.empty:
+            return {}
+        t = self.races[race].event
+        rng = np.random.default_rng([self.config.reaction.seed, t.season, t.round])
+        n = self.config.hazards.export_draws
+        found = reaction.draws(rows.reset_index(drop=True), self.config.reaction, n, rng)
+        return {name: [round(float(v), 4) for v in found[name]] for name in reaction.COLUMNS}
 
 
 def race_hazards(
