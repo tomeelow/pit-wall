@@ -5,7 +5,7 @@ import { percent } from "./Controls";
 import type { Loaded } from "./hooks";
 import { Empty, Failure, Skeleton } from "./States";
 
-const README = "https://github.com/tomeelow/pit-wall#simulator-calibration";
+const README = "https://github.com/tomeelow/pit-wall#how-much-to-trust-it";
 
 /** What produced the numbers on the other screens, and how well they have held up. */
 export function ModelCard({
