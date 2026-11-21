@@ -12,8 +12,8 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 from pydantic.json_schema import GenerateJsonSchema
 
-SchemaVersion = Literal["0.5.0"]
-SCHEMA_VERSION: SchemaVersion = "0.5.0"
+SchemaVersion = Literal["0.6.0"]
+SCHEMA_VERSION: SchemaVersion = "0.6.0"
 
 Compound = Literal["SOFT", "MEDIUM", "HARD", "INTERMEDIATE", "WET", "UNKNOWN"]
 
@@ -123,6 +123,9 @@ class Degradation(_Contract):
     warmup_s: list[list[list[float]]]  # per compound, per stint lap, per draw
     # Per compound: the race's own evidence. Few laps mean pace and wear come from other races.
     race_clean_laps: list[int]
+    # Per compound: the longest stint the strategy search proposes on it, learnt from the era's
+    # other races (null: no cap). Wear beyond it would be extrapolated.
+    max_stint_laps: list[int | None]
 
 
 class PitLoss(_Contract):

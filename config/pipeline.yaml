@@ -105,6 +105,13 @@ events:
     # Lane time above this x the race's median lane time is a penalty, repair or red-flag queue,
     # not a tyre stop.
     max_lane_factor: 1.5
+  # The longest stint the strategy search proposes on a C-number: this quantile of the stints
+  # completed on it (ended by a stop or the flag) in the era's other races. Wear is linear, fitted
+  # on stints teams chose to run; beyond these lengths it is extrapolated, and the search would
+  # exploit that by stopping later and later. A C-number with fewer stints uses the era's stints.
+  stint_cap:
+    quantile: 0.95
+    min_stints: 30
   hazards:
     # A fit takes seconds, and every race gets its own masked refit, each gated: long chains and a
     # high target keep rare families (three lap-1 red flags; their unit_sd funnels) under the gate.

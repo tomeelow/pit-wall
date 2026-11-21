@@ -4,10 +4,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from pitwall.config import load_regulations
+from pitwall.config import StintCapConfig, load_regulations
 from pitwall.ingest.storage import RaceTables
 from pitwall.models import hazards, pit_loss
-from pitwall.models.events import History
+from pitwall.models.events import History, completed_stints, stint_caps
 from tests.conftest import CONFIG
 
 ERA = load_regulations().era("2023-2025")
@@ -140,3 +140,25 @@ def test_neutralised_pace_is_not_pooled_across_eras(race_tables: RaceTables) -> 
     alone = pit_loss.neutralised_pace(race_tables)["factor"].median()
     assert history.parameters("2024-01", ERA.name).neutralised_lap_factor["SC"] == round(alone, 3)
     assert history.parameters("2026-01", "2026").neutralised_lap_factor["SC"] > 2 * alone - 0.1
+
+
+def test_stint_caps_come_from_completed_stints_of_other_races(race_tables: RaceTables) -> None:
+    stints = completed_stints(race_tables)
+    # SAR's only stint ended in a retirement: it says nothing about how long the tyres could go.
+    assert sorted(map(tuple, stints.to_numpy().tolist())) == [
+        (1, 25),
+        (1, 37),
+        (2, 20),
+        (3, 15),
+        (3, 17),
+    ]
+    caps, other = stint_caps(stints, StintCapConfig(quantile=1.0 - 1e-9, min_stints=2))
+    assert caps == {"1": 37, "3": 17} and other == 37  # C2 has one stint: the era's cap
+    assert stint_caps(stints.iloc[:0], StintCapConfig(quantile=0.95, min_stints=2)) == ({}, None)
+
+    other_race = replace(race_tables, event=race_tables.event.model_copy(update={"round": 2}))
+    history = History.of([race_tables, other_race], EVENTS, load_regulations())
+    # Each race's cap is learnt from the other race only.
+    assert history.parameters("2024-01", ERA.name).max_stint_laps_other is not None
+    alone = History.of([race_tables], EVENTS, load_regulations()).parameters("2024-01", ERA.name)
+    assert alone.max_stint_laps == {} and alone.max_stint_laps_other is None

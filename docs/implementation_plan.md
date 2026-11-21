@@ -1345,6 +1345,26 @@ debrief) + one surprising finding from real races.
 
 ---
 
+## After review (2026-11-21)
+
+Decisions on the questions left open by Phases 7, 8 and 3.
+
+### Stint cap instead of a wear cliff
+- Wear stays linear: the residuals show no curvature, and a cliff term would be fitted on stints
+  teams ended before any cliff. Instead the strategy search never proposes a stint longer than the
+  95th percentile of stints completed on that C-number (ended by a stop or the flag, not a
+  retirement) in the era's *other* races; a C-number with fewer than 30 such stints uses the era's
+  stints. Settings: `config/pipeline.yaml` → `events.stint_cap`; fitted by `make fit-events` into
+  `events.json`, exported as `Degradation.max_stint_laps` (contract 0.6.0). A running stint
+  already past its cap may still stop at the first lap the other bounds allow.
+- Caps for 2023-25, from the other races of Monza 2024: C1 39, C2 42, C3 42, C4 38, C5 34 laps.
+- The cap binds in 58 of 75 simulable races and removes 3.8 % of the leader's lap-1 candidates,
+  mostly one-stops whose stints run past anything raced.
+- **It does not explain the debrief's preference for later stops.** On Monza 2023, 2024 and 2025
+  (top five, 18 decisions) every verdict is unchanged: the later stops the search prefers are
+  7-14 laps later and well inside the cap. That leaves open-loop rivals as the likelier cause.
+- Calibration is unchanged (it runs the actual strategies, which the cap does not touch).
+
 ## Common Pitfalls
 
 **Fitting degradation on raw lap times.** Fuel burn-off hides tyre wear; you get near-zero or

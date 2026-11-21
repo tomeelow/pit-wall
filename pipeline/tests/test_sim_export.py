@@ -53,6 +53,8 @@ def write_models(folder: Path, tables: RaceTables, drivers: tuple[str, ...]) -> 
         "stationary_s": [2.2, 2.4],
         "neutralised_lap_factor": {"SC": 1.45, "VSC": 1.25},
         "duration_laps": {"SC": [3, 4], "VSC": [1, 2], "RED": [1]},
+        "max_stint_laps": {"1": 40, "3": 30},
+        "max_stint_laps_other": 35,
     }
     (folder / "events.json").write_text(json.dumps(events))
     traffic = pd.DataFrame(
@@ -132,6 +134,7 @@ def test_race_carries_its_rules_and_realised_events(
     assert sim.degradation.race_clean_laps == [
         int((clean["compound_c"] == c).sum()) for c in (1, 2, 3)
     ]
+    assert sim.degradation.max_stint_laps == [40, 35, 30]  # C2 has no cap of its own
     assert REGULATIONS.rules(2025, 8).min_stops == 2  # Monaco 2025
     assert REGULATIONS.rules(2024, 8).min_stops == 0
 

@@ -6,6 +6,7 @@ What a race's parameters may learn from (the information-set rule):
   much a stop under a safety car saves (0.68x green in 2023-2025, 0.94x in 2026).
 - Random events are not. Stationary times, neutralisation durations and the event rates for a
   race come from every *other* race.
+- Neither is the stint cap: how long stints get on a C-number comes from the era's other races.
 """
 
 from dataclasses import dataclass
@@ -15,7 +16,7 @@ import numpy as np
 import pandas as pd
 from pydantic import BaseModel
 
-from pitwall.config import EventsConfig, Regulations
+from pitwall.config import EventsConfig, Regulations, StintCapConfig
 from pitwall.ingest.storage import RaceTables, dataset_fingerprint
 from pitwall.models import hazards, pit_loss
 from pitwall.models.degradation import race_id
@@ -30,6 +31,44 @@ class EventParameters(BaseModel):
     stationary_s: list[float]  # empirical, slow stops included
     neutralised_lap_factor: dict[str, float]  # lap time under SC / VSC over a clean lap
     duration_laps: dict[str, list[int]]  # observed durations of each neutralisation kind
+    # Longest stint the strategy search proposes, per C-number seen in the era's other races, and
+    # for any other C-number; None with no other race in the era to learn from.
+    max_stint_laps: dict[str, int]
+    max_stint_laps_other: int | None
+
+
+def completed_stints(tables: RaceTables) -> pd.DataFrame:
+    """Laps of every dry stint ended by a stop or by the flag (compound_c, laps). Stints ended by
+    a retirement say nothing about how long the tyres could go."""
+    laps = tables.laps.dropna(subset=["compound_c"])
+    finished = set(tables.results.loc[tables.results["status"] == "Finished", "driver"])
+    last_lap = tables.laps.groupby("driver")["lap"].max()
+    stints = laps.groupby(["driver", "stint"]).agg(
+        compound_c=("compound_c", "last"),
+        laps=("lap", "size"),
+        end=("lap", "max"),
+        pitted=("pit_in", "last"),
+    )
+    drivers = stints.index.get_level_values("driver")
+    flag = (stints["end"].to_numpy() == last_lap.loc[drivers].to_numpy()) & drivers.isin(finished)
+    done = stints[stints["pitted"].astype(bool).to_numpy() | flag]
+    return done[["compound_c", "laps"]].astype(int).reset_index(drop=True)
+
+
+def _upper(laps: pd.Series, cap: StintCapConfig) -> int:
+    return int(np.ceil(np.quantile(laps, cap.quantile)))
+
+
+def stint_caps(stints: pd.DataFrame, cap: StintCapConfig) -> tuple[dict[str, int], int | None]:
+    """Per C-number with at least min_stints stints, and for all of them together."""
+    if stints.empty:
+        return {}, None
+    per_c = {
+        str(c): _upper(group["laps"], cap)
+        for c, group in stints.groupby("compound_c")
+        if len(group) >= cap.min_stints
+    }
+    return per_c, _upper(stints["laps"], cap)
 
 
 @dataclass(frozen=True)
@@ -41,18 +80,21 @@ class History:
     paces: pd.DataFrame  # pit_loss.neutralised_pace + race, era
     periods: pd.DataFrame  # neutralisations + race
     rows: pd.DataFrame  # hazard rows
+    stints: pd.DataFrame  # completed_stints + race, era
+    stint_cap: StintCapConfig
 
     @classmethod
     def of(
         cls, tables: list[RaceTables], config: EventsConfig, regulations: Regulations
     ) -> "History":
         races = {race_id(t.event.season, t.event.round): t for t in tables}
-        stops, paces, periods, rows = [], [], [], []
+        stops, paces, periods, rows, stints = [], [], [], [], []
         for race, t in races.items():
             era = regulations.era_of(t.event.season)
             stops.append(pit_loss.stop_losses(t, config.pit_loss).assign(race=race, era=era.name))
             paces.append(pit_loss.neutralised_pace(t).assign(race=race, era=era.name))
             periods.append(t.neutralisations.assign(race=race))
+            stints.append(completed_stints(t).assign(race=race, era=era.name))
             rows += [
                 hazards.neutralisation_rows(t, race, era),
                 hazards.retirement_rows(t, race, era),
@@ -64,6 +106,8 @@ class History:
             paces=pd.concat(paces, ignore_index=True),
             periods=pd.concat(periods, ignore_index=True),
             rows=pd.concat(rows, ignore_index=True),
+            stints=pd.concat(stints, ignore_index=True),
+            stint_cap=config.stint_cap,
         )
 
     def parameters(self, race: str, era: str) -> EventParameters:
@@ -78,6 +122,10 @@ class History:
             transit = loss - float(np.median(stationary))
         periods = self.periods[self.periods["race"] != race]
         durations = periods["end_lap"] - periods["start_lap"] + 1
+        caps, other_cap = stint_caps(
+            self.stints[(self.stints["race"] != race) & (self.stints["era"] == era)],
+            self.stint_cap,
+        )
         return EventParameters(
             pit_loss_s=round(float(loss), 3),
             pit_transit_s=round(float(transit), 3),
@@ -98,6 +146,8 @@ class History:
                 kind: sorted(durations[periods["kind"] == kind].astype(int).tolist())
                 for kind in hazards.KINDS
             },
+            max_stint_laps=caps,
+            max_stint_laps_other=other_cap,
         )
 
 

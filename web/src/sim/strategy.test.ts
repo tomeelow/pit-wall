@@ -105,6 +105,21 @@ describe("candidates", () => {
       p.map((s) => s.compound_c),
     );
     expect(new Set(proposed)).toEqual(new Set([1, 2]));
+    // Wear beyond the stints of other races is extrapolated: C1 never runs more than 10 laps, and
+    // a running C2 stint capped below the minimum stint stops as soon as that allows.
+    const capped = {
+      ...race,
+      degradation: { ...race.degradation, max_stint_laps: [10, 3, null] },
+    };
+    const cappedPlans = candidates(capped, 0, 1, SETTINGS);
+    expect(cappedPlans.length).toBeGreaterThan(0);
+    for (const plan of cappedPlans) {
+      const ends = [...plan.map((s) => s.lap), race.total_laps];
+      plan.forEach((stop, k) => {
+        if (stop.compound_c === 1) expect(ends[k + 1]! - stop.lap).toBeLessThanOrEqual(10);
+      });
+    }
+    expect(cappedPlans.every((p) => p[0]!.lap === SETTINGS.min_stint_laps)).toBe(true);
     const tight = candidates(race, 0, 1, { ...SETTINGS, max_candidates: 100 });
     expect(tight.length).toBeLessThanOrEqual(100);
     expect(tight.filter((p) => p.length === 1)).toHaveLength(42); // one-stop plans keep every lap
