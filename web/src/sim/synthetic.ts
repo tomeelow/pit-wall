@@ -12,6 +12,7 @@ export interface SyntheticOptions {
   noiseSd?: number;
   passIntercept?: number;
   warmupS?: number[]; // per stint lap from the out-lap, every compound
+  reactSc?: number | null; // safety-car reaction intercept; null: no car reacts
 }
 
 export function syntheticRace(options: SyntheticOptions = {}): SimRace {
@@ -26,6 +27,7 @@ export function syntheticRace(options: SyntheticOptions = {}): SimRace {
     noiseSd = 0.3,
     passIntercept = 0,
     warmupS = [0, 0],
+    reactSc = 1,
   } = options;
   const compounds = [1, 2, 3];
   const repeat = (value: number) => Array.from({ length: draws }, () => value);
@@ -35,7 +37,7 @@ export function syntheticRace(options: SyntheticOptions = {}): SimRace {
   const firstStint = (i: number) => (i % 2 === 0 ? 2 : 1);
   const stopLap = Math.floor(laps / 2);
   return {
-    schema_version: "0.6.0",
+    schema_version: "0.7.0",
     season: 2024,
     round: 1,
     name: "Synthetic Grand Prix",
@@ -89,6 +91,15 @@ export function syntheticRace(options: SyntheticOptions = {}): SimRace {
       beta_pace_delta_s: repeat(1.8),
       beta_within_drs: repeat(-1),
     },
+    reaction:
+      reactSc === null
+        ? { intercept_sc: [], intercept_vsc: [], tyre_age_per_10: [], race_left: [] }
+        : {
+            intercept_sc: spread(reactSc, 0.5),
+            intercept_vsc: repeat(reactSc - 2),
+            tyre_age_per_10: repeat(1.2),
+            race_left: repeat(-2.9),
+          },
     cars: Array.from({ length: cars }, (_, i) => ({
       driver: `D${String(i + 1).padStart(2, "0")}`,
       team_id: `team${Math.floor(i / 2)}`,

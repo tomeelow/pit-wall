@@ -20,7 +20,7 @@ import {
   type Mode,
   type Strategy,
 } from "./index.ts";
-import { GREEN, SC } from "./prepare.ts";
+import { GREEN, SC, VSC } from "./prepare.ts";
 import { syntheticRace, type SyntheticOptions } from "./synthetic.ts";
 
 const SAMPLED: Mode = { events: "sampled", noise: true };
@@ -145,12 +145,18 @@ describe("invariants over random races and strategies", () => {
           if (trace.position[lap * n + i] === 0 || lap === fromLap + 1) continue;
           const stopped = trace.stops[lap * n + i]! - trace.stops[before]!;
           expect(stopped === 0 || stopped === 1).toBe(true);
-          const stop = Array.from(plan.lap.subarray(plan.offset[i], plan.offset[i + 1])).indexOf(
-            lap,
-          );
-          if (stop >= 0) {
-            expect(stopped).toBe(1);
-            expect(trace.age[lap * n + i]).toBe(plan.tyreAge[plan.offset[i]! + stop]);
+          // The next planned stop: taken on its lap, or earlier only when a safety car or VSC
+          // starts (the reaction). Either way it is that stop, with its tyres.
+          const next = plan.offset[i]! + trace.stops[before]! - prepared.stops[i]!;
+          const planned = next < plan.offset[i + 1]!;
+          if (planned && plan.lap[next] === lap) expect(stopped).toBe(1);
+          if (stopped) {
+            expect(planned).toBe(true);
+            expect(trace.age[lap * n + i]).toBe(plan.tyreAge[next]);
+            if (plan.lap[next] !== lap) {
+              expect([SC, VSC]).toContain(trace.neutralisation[lap]);
+              expect(plan.lap[next]!).toBeGreaterThan(lap);
+            }
           } else {
             expect(trace.age[lap * n + i]).toBe(trace.age[before]! + 1);
           }
@@ -253,6 +259,43 @@ describe("mechanics", () => {
 
     const underRed = { ...race, realised: [{ kind: "RED" as const, start_lap: 6, end_lap: 6 }] };
     expect(time(underRed, [sameSet]) - time(underRed, [[]])).toBeCloseTo(0, 6);
+  });
+
+  it("brings a planned stop forward when a sampled safety car or VSC starts, never ex post", () => {
+    const late = (race: SimRace) => race.cars.map(() => [{ lap: 35, compound_c: 1, tyre_age: 0 }]);
+    const stopLaps = (race: SimRace, index: number, mode = SAMPLED) => {
+      const { trace, prepared } = simulate(race, { strategies: late(race), index, mode });
+      const n = prepared.cars;
+      // The race starts green, so the first SC or VSC lap starts one (a red flag may precede it).
+      const firstStart = Array.from({ length: race.total_laps }, (_, k) => k + 1).find((lap) =>
+        [SC, VSC].includes(trace.neutralisation[lap]!),
+      );
+      const stops = Array.from({ length: n }, (_, i) =>
+        Array.from({ length: race.total_laps }, (_, k) => k + 1).find(
+          (lap) => trace.stops[lap * n + i]! > prepared.stops[i]!,
+        ),
+      );
+      return { firstStart, stops };
+    };
+
+    // Every car always reacts: each takes its lap-35 stop on the first lap of the first one.
+    const eager = syntheticRace({ cars: 4, laps: 40, eventRate: 0.05, dnfRate: 0, reactSc: 30 });
+    let reacted = 0;
+    for (let index = 0; index < 30; index++) {
+      const { firstStart, stops } = stopLaps(eager, index);
+      const expected = firstStart !== undefined && firstStart < 35 ? firstStart : 35;
+      expect(stops).toEqual(stops.map(() => expected));
+      if (expected < 35) reacted++;
+    }
+    expect(reacted).toBeGreaterThan(10);
+
+    // No fitted reaction, or events as they happened: the plan is followed.
+    const never = syntheticRace({ cars: 4, laps: 40, eventRate: 0.05, dnfRate: 0, reactSc: null });
+    for (let index = 0; index < 30; index++) {
+      expect(stopLaps(never, index).stops).toEqual([35, 35, 35, 35]);
+    }
+    const realised = { ...eager, realised: [{ kind: "SC" as const, start_lap: 10, end_lap: 12 }] };
+    expect(stopLaps(realised, 0, REPLAY).stops).toEqual([35, 35, 35, 35]);
   });
 
   it("adds warm-up on the first green laps of a stint", () => {
