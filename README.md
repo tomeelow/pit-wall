@@ -1,5 +1,12 @@
 # Pit Wall
 
+[![ci](https://github.com/tomeelow/pit-wall/actions/workflows/ci.yml/badge.svg)](https://github.com/tomeelow/pit-wall/actions/workflows/ci.yml)
+[![weekend refit](https://github.com/tomeelow/pit-wall/actions/workflows/weekend.yml/badge.svg)](https://github.com/tomeelow/pit-wall/actions/workflows/weekend.yml)
+[![site](https://img.shields.io/badge/site-GitHub%20Pages-222?logo=github)](https://tomeelow.github.io/pit-wall/)
+![python](https://img.shields.io/badge/python-3.13-3776AB?logo=python&logoColor=white)
+![web](https://img.shields.io/badge/web-React%20%2B%20TypeScript-3178C6?logo=typescript&logoColor=white)
+[![data](https://img.shields.io/badge/data-OpenF1-E10600)](https://openf1.org)
+
 **What if they had pitted three laps earlier?** Pit Wall re-runs real Formula 1 races thousands of
 times to test strategy calls, and tells you how sure it can be about the answer.
 
