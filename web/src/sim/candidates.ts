@@ -5,7 +5,8 @@ import type { Strategy } from "./prepare.ts";
 /**
  * Plans for one car from the race state after `fromLap` that the rules allow: 0 to max_stops
  * stops in all, every planned stint at least min_stint_laps long (the stint running at fromLap
- * counted from its start), on a new set of any C-number with min_race_clean_laps in the race (with
+ * counted from its start) and no longer than its C-number's cap (wear beyond the stints of other
+ * races is extrapolated), on a new set of any C-number with min_race_clean_laps in the race (with
  * fewer, its pace and wear are extrapolated from other races, and the search would exploit that).
  * Which sets a driver really had left is not in the data, so every such C-number counts as
  * available new.
@@ -38,7 +39,13 @@ export function candidates(
     return used.size >= min_dry_compounds && done + stops.length >= min_stops;
   };
   const fitsMax = (length: number) => max_stint_laps === null || length <= max_stint_laps;
-  const stintOk = (length: number) => length >= minStint && fitsMax(length);
+  // A running stint at or past its cap may still stop at the first lap the other bounds allow.
+  const cap = (c: number, running: boolean): number => {
+    const learnt = race.degradation.max_stint_laps[race.compounds.indexOf(c)] ?? Infinity;
+    return running ? Math.max(learnt, minStint, stintSoFar + fromLap + 1) : learnt;
+  };
+  const stintOk = (length: number, c: number, running: boolean) =>
+    length >= minStint && fitsMax(length) && length <= cap(c, running);
 
   /** All m-stop plans with pit laps `step` apart, or null once there are more than `limit`. */
   const plans = (m: number, step: number, limit: number): Strategy[] | null => {
@@ -46,16 +53,22 @@ export function candidates(
     const stops: PlannedStop[] = [];
     const extend = (previous: number): boolean => {
       if (stops.length === m) {
-        const last = stops.length === 0 ? null : stops[stops.length - 1]!.lap;
-        const final = last === null ? stintSoFar + total : total - last;
-        if (!(last === null ? fitsMax(final) : stintOk(final)) || !legal(stops)) return true;
+        const last = stops.length === 0 ? null : stops[stops.length - 1]!;
+        const final = last === null ? stintSoFar + total : total - last.lap;
+        const ok =
+          last === null
+            ? fitsMax(final) && final <= cap(compound, true)
+            : stintOk(final, last.compound_c, false);
+        if (!ok || !legal(stops)) return true;
         out.push([...stops]);
         return out.length <= limit;
       }
       const start = stops.length === 0 ? fromLap + 1 : previous + minStint;
       for (let lap = start; lap < total; lap += step) {
-        const length = stops.length === 0 ? stintSoFar + lap : lap - previous;
-        if (!stintOk(length)) continue;
+        const running = stops.length === 0;
+        const length = running ? stintSoFar + lap : lap - previous;
+        const on = running ? compound : stops[stops.length - 1]!.compound_c;
+        if (!stintOk(length, on, running)) continue;
         for (const c of offered) {
           stops.push({ lap, compound_c: c, tyre_age: 0 });
           const more = extend(lap);

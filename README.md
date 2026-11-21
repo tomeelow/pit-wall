@@ -111,7 +111,10 @@ numbers.
 
 - **The debrief prefers later stops.** Rivals cannot react, so covering an undercut is worth
   nothing, and tyre wear is linear, with no cliff. Its "should have stopped later" verdicts on first
-  stops are therefore not evidence of a mistake.
+  stops are therefore not evidence of a mistake. The search never proposes a stint longer than
+  other races of the era have run on that C-number (their 95th percentile), so it cannot exploit
+  wear extrapolated past them. That cap did not change the Monza verdicts: the later stops it
+  prefers are well inside it.
 - **Plans cannot react either.** A stop the team made because a safety car came out is judged, ex
   ante, as a planned green-flag stop.
 - **Undercut probabilities above 0.6 are too confident** on the few real pairs seen: predicted
@@ -203,10 +206,11 @@ Actions.
 ## What I'd do with more time
 
 - **Reactive opponents.** Rivals keep their real strategies ([ADR-004](docs/adr/004-open-loop-opponents.md)).
-  Letting them cover an undercut or pit under a safety car is the biggest known gap, and the most
-  likely fix for the late-race overconfidence.
+  Letting them cover an undercut is the biggest known gap. Bringing planned stops forward under a
+  sampled safety car was tried and left calibration unchanged, so it is not shipped.
 - **A tyre cliff.** Wear is linear because the residuals show no curvature, even 30+ laps into a
-  stint. Teams usually stop before a cliff, so the data may simply not contain one.
+  stint. Teams usually stop before a cliff, so the data may simply not contain one; the strategy
+  search stays within the stint lengths raced instead of modelling one.
 - **Live mode.** v1 is post-race only ([ADR-005](docs/adr/005-post-race-only.md)); live OpenF1
   data is a paid tier.
 - **Sprint races** and **wet-weather strategy**, neither of which is modelled.

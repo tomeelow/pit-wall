@@ -76,6 +76,11 @@ class PitLossConfig(_Config):
     max_lane_factor: float = Field(gt=1)
 
 
+class StintCapConfig(_Config):
+    quantile: float = Field(gt=0, lt=1)
+    min_stints: int = Field(ge=1)
+
+
 class HazardPriors(_Config):
     log_rate: NormalPrior
     unit_sd: float = Field(gt=0)
@@ -91,6 +96,7 @@ class HazardConfig(_Config):
 
 class EventsConfig(_Config):
     pit_loss: PitLossConfig
+    stint_cap: StintCapConfig
     hazards: HazardConfig
 
 

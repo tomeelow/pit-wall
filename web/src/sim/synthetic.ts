@@ -35,7 +35,7 @@ export function syntheticRace(options: SyntheticOptions = {}): SimRace {
   const firstStint = (i: number) => (i % 2 === 0 ? 2 : 1);
   const stopLap = Math.floor(laps / 2);
   return {
-    schema_version: "0.5.0",
+    schema_version: "0.6.0",
     season: 2024,
     round: 1,
     name: "Synthetic Grand Prix",
@@ -62,6 +62,7 @@ export function syntheticRace(options: SyntheticOptions = {}): SimRace {
       offset_s: [repeat(0.6), repeat(0), repeat(-0.6)],
       warmup_s: compounds.map(() => warmupS.map(repeat)),
       race_clean_laps: compounds.map(() => 100),
+      max_stint_laps: compounds.map(() => null),
     },
     pit_loss: {
       transit_s: 20,

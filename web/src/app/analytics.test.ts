@@ -15,7 +15,7 @@ const square: TrackOutline = {
 };
 
 const replay = (cars: Record<string, number[]>): Replay => ({
-  schema_version: "0.5.0",
+  schema_version: "0.6.0",
   season: 2024,
   round: 1,
   dataset_version: "x",
@@ -64,7 +64,7 @@ describe("replay", () => {
 });
 
 const lap = (driver: string, distance_m: number[], time_ms: number[]): TelemetryLap => ({
-  schema_version: "0.5.0",
+  schema_version: "0.6.0",
   driver,
   lap: 1,
   lap_time_s: time_ms.at(-1)! / 1000,

@@ -132,6 +132,19 @@
             "type": "integer"
           },
           "type": "array"
+        },
+        "max_stint_laps": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": "array"
         }
       },
       "required": [
@@ -142,7 +155,8 @@
         "noise_sd_s",
         "offset_s",
         "warmup_s",
-        "race_clean_laps"
+        "race_clean_laps",
+        "max_stint_laps"
       ],
       "title": "Degradation",
       "type": "object"
@@ -478,7 +492,7 @@
   "additionalProperties": false,
   "properties": {
     "schema_version": {
-      "const": "0.5.0",
+      "const": "0.6.0",
       "type": "string"
     },
     "season": {

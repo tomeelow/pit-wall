@@ -231,6 +231,10 @@ def build_sim(
                 for c in compounds
             ],
             race_clean_laps=[int(clean.get(c, 0)) for c in compounds],
+            max_stint_laps=[
+                events["max_stint_laps"].get(str(c), events["max_stint_laps_other"])
+                for c in compounds
+            ],
         ),
         pit_loss=PitLoss(
             transit_s=events["pit_transit_s"],

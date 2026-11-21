@@ -1345,6 +1345,47 @@ debrief) + one surprising finding from real races.
 
 ---
 
+## After review (2026-11-21)
+
+Decisions on the questions left open by Phases 7, 8 and 3.
+
+### Stint cap instead of a wear cliff
+- Wear stays linear: the residuals show no curvature, and a cliff term would be fitted on stints
+  teams ended before any cliff. Instead the strategy search never proposes a stint longer than the
+  95th percentile of stints completed on that C-number (ended by a stop or the flag, not a
+  retirement) in the era's *other* races; a C-number with fewer than 30 such stints uses the era's
+  stints. Settings: `config/pipeline.yaml` → `events.stint_cap`; fitted by `make fit-events` into
+  `events.json`, exported as `Degradation.max_stint_laps` (contract 0.6.0). A running stint
+  already past its cap may still stop at the first lap the other bounds allow.
+- Caps for 2023-25, from the other races of Monza 2024: C1 39, C2 42, C3 42, C4 38, C5 34 laps.
+- The cap binds in 58 of 75 simulable races and removes 3.8 % of the leader's lap-1 candidates,
+  mostly one-stops whose stints run past anything raced.
+- **It does not explain the debrief's preference for later stops.** On Monza 2023, 2024 and 2025
+  (top five, 18 decisions) every verdict is unchanged: the later stops the search prefers are
+  7-14 laps later and well inside the cap. That leaves open-loop rivals as the likelier cause.
+- Calibration is unchanged (it runs the actual strategies, which the cap does not touch).
+
+### Reactive stops under a safety car: tried, not shipped
+- Built as agreed (draft PR 19): on the first lap of a sampled SC or VSC, every car with a planned
+  stop still to make may take it at once. P = logistic(kind + tyre age + share of race left), per
+  era, learnt from the other races, with bootstrap draws. The fit is clear: 67-71 % of such cars
+  stop on an SC's first two laps, 23 % under a VSC; +1.2 log-odds per 10 laps of tyre age
+  (2023-25); less likely with more race left.
+- The condition for shipping was better calibration after a neutralisation without a worse overall
+  score. It moved by no more than refit noise: after a real neutralisation, coverage 0.442 / 0.732
+  → 0.445 / 0.740 and log score −2.2569 → −2.2571; from 75 % distance unchanged (0.435 / 0.708 →
+  0.435 / 0.709); overall log score −1.9297 → −1.9313. So opponents stay open loop (ADR-004).
+- Likely reason: the backtest runs the real plans, which already hold the stops made under the
+  real safety cars; under a sampled one a car can only bring forward a stop it was making anyway.
+  The overconfidence after real neutralisations comes from not anticipating them, which is the
+  information-set rule working as intended, not something a reaction to sampled events fixes.
+- The late-race overconfidence (from 75 %) remains unexplained by reactive stops; defending and
+  driver errors are the remaining candidates.
+
+### Other decisions
+- The calibration gate thresholds (Phase 7) are accepted as they are.
+- The site credits OpenF1 only until Jolpica data is used.
+
 ## Common Pitfalls
 
 **Fitting degradation on raw lap times.** Fuel burn-off hides tyre wear; you get near-zero or
