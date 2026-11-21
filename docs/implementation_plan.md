@@ -980,7 +980,7 @@ The PIT histogram, in 10 bins, is close to flat with a slight U shape:
   degradation and the pass model are fitted on every race including the one simulated: the
   documented pace softening. So these numbers are not fully out of sample for pace.
 
-**Gate** (`config/thresholds.yaml` → `simulator`; these values are a proposal, open to review):
+**Gate** (`config/thresholds.yaml` → `simulator`; accepted after review, 2026-11-21):
 - From 50 % distance, every start fraction must beat the order at the start lap on log score.
 - Against the accepted calibration, the overall log score may not fall by more than 0.02.
 - Against the accepted calibration, neither coverage may move more than 3 points further from

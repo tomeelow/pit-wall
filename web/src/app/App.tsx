@@ -74,7 +74,7 @@ export function App() {
         </>
       )}
       <footer className="footer">
-        Unofficial project, not affiliated with Formula 1. Data from OpenF1 and Jolpica.
+        Unofficial project, not affiliated with Formula 1. Data from OpenF1.
       </footer>
     </>
   );

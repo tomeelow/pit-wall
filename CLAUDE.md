@@ -160,7 +160,7 @@ When evaluating a situation at lap N, the simulator may only use information ava
 
 ### Legal
 Unofficial project, not affiliated with Formula 1. No F1 logos, team logos or official branding;
-attribute OpenF1 and Jolpica.
+attribute OpenF1, and Jolpica once its data is used.
 
 ## Ask before acting
 
