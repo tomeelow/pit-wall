@@ -178,7 +178,7 @@ class Car(_Contract):
     pace_s: list[float]  # per draw
     slope_s_per_lap: list[list[float]]  # per compound, per draw
     dnf_rate_per_lap: list[float]  # per draw
-    stops: list[PlannedStop]  # the strategy actually run
+    stops: list[PlannedStop]  # the strategy actually run; tyre changes on the grid are not stops
     finish_position: int | None  # official classification; None for DNF and DSQ
     retired_after_lap: int | None  # last lap completed by a car that did not finish
     # Ran intermediates or wets: Art. 30.5's two-dry-compound rule does not apply to this car.
@@ -195,7 +195,7 @@ class Snapshot(_Contract):
     compound_c: list[int | None]
     tyre_age: list[int | None]
     stint_laps: list[int | None]  # laps raced on the current set in this race
-    stops: list[int]
+    stops: list[int]  # pit stops made so far
     dry_compounds: list[list[int]]  # C-numbers used so far
 
 

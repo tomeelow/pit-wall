@@ -765,7 +765,14 @@ R12 (39 of 52), 2025 R12 (44 of 52), 2025 R13 (1 of 44, wet on lap 1 only), 2026
 `Car.wet_tyres_used` waives the two-dry-compound rule (Art. 30.5) for a car with laps on wet sets.
 Ingestion no longer moves a one-lap stint off its pit lap when the next stint starts on the out-lap:
 in 2026 R16 four cars fitted inters on the grid during the suspended start and pitted for slicks
-after lap 2, and the alignment had folded that lap into the dry stint before it. Rain itself is never sampled,
+after lap 2, and the alignment had folded that lap into the dry stint before it. Those grid
+changes are not stops: a stint change in the first `sim.grid_change_laps` (2) laps with neither a
+pit record nor an out-lap counts towards neither `Snapshot.stops` nor `Car.stops`. That covers the
+Bahrain grid, the lap-1 inters-to-slicks change OpenF1 gives every car in 2025 R13 (they pitted
+on laps 11–13), and single-lap stint artifacts in 2023 R8 and 2026 R11, R17–R19; later unmarked
+changes stay stops, since OpenF1 lacks pit data for some races (2026 R1). Canada 2023 replays
+worse without TSU's phantom lap-2 stop (mean error 1.33 → 1.67); calibration moves by 0.0002 in
+log score. Rain itself is never sampled,
 and the first laps on a drying track are modelled as dry. Recalibrated with the new races: 81
 races scored (2025 R12 starts too late for any start point), overall log score −1.938 (was
 −1.930), coverage 0.486 / 0.785; the gate passes.

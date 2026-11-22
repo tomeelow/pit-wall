@@ -174,6 +174,22 @@ def test_early_wet_running_moves_the_first_start_lap(
     assert [(s.lap, s.compound_c) for s in sim.cars[lec].stops] == [(15, 1), (40, 3)]
 
 
+def test_a_tyre_change_on_the_grid_is_not_a_stop(
+    race_folder: Path, race_tables: RaceTables
+) -> None:
+    laps = race_tables.laps.copy()
+    lec = laps["driver"] == "LEC"
+    # A new set for lap 2 with no pit record or out-lap: fitted on the grid at a suspended start.
+    laps.loc[lec & (laps["lap"] == 1), "stint"] = 0
+    # A real stop whose pit data the source lacks still counts.
+    laps.loc[lec & (laps["lap"] == 40), "pit_in"] = False
+    laps.loc[lec & (laps["lap"] == 41), "pit_out"] = False
+    sim = build(race_folder, replace(race_tables, laps=laps))
+    i = [car.driver for car in sim.cars].index("LEC")
+    assert [s.lap for s in sim.cars[i].stops] == [15, 40]
+    assert [sim.snapshots[lap - 1].stops[i] for lap in (5, 20, 45)] == [0, 1, 2]
+
+
 def test_a_dry_race_starts_after_lap_1(race_folder: Path, race_tables: RaceTables) -> None:
     sim = build(race_folder, race_tables)
     assert sim.first_start_lap == 1
