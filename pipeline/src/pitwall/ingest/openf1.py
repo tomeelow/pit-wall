@@ -2,7 +2,6 @@
 
 import time
 from datetime import datetime, timedelta
-from itertools import pairwise
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -169,14 +168,25 @@ def _align_stints_to_pits(stints: pd.DataFrame, pit_laps: set[tuple[int, int]]) 
     """Some sessions start a stint on the pit in-lap. The in-lap is run on the old set (the pit
     record and is_pit_out_lap agree on that), so move the boundary to the out-lap. A stint that
     follows a pit on the previous lap is already aligned, even if it is itself a pit lap (pit
-    lane queues under a red flag give pit records on consecutive laps)."""
+    lane queues under a red flag give pit records on consecutive laps).
+
+    A one-lap stint on a pit lap whose successor starts on the next lap, not itself a pit lap, is
+    aligned too: the set went on without a pit (on the grid while the start was suspended) and
+    came off at this pit, so the pit ends the stint rather than starting it."""
     rows = stints.sort_values(["driver_number", "stint_number"]).to_dict("records")
-    for before, row in pairwise(rows):
+    for before, row, after in zip(rows, rows[1:], [*rows[2:], None], strict=False):
         driver, start = row["driver_number"], row["lap_start"]
+        ends_at_this_pit = (
+            after is not None
+            and after["driver_number"] == driver
+            and after["lap_start"] == start + 1
+            and (driver, start + 1) not in pit_laps
+        )
         if (
             before["driver_number"] == driver
             and (driver, start) in pit_laps
             and (driver, start - 1) not in pit_laps
+            and not ends_at_this_pit
         ):
             row["lap_start"] += 1
             before["lap_end"] = row["lap_start"] - 1

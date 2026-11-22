@@ -113,19 +113,6 @@ def _per_draw(frame: pd.DataFrame, column: str, n: int, decimals: int) -> list[f
     return np.round(values, decimals).tolist()
 
 
-def _wet_tyres_used(laps: pd.DataFrame, results: pd.DataFrame, min_dry: int) -> set[str]:
-    """Drivers exempt from the two-dry-compound rule. Laps on wet sets show most; aligning OpenF1
-    stints to pit records can fold a one-lap wet stint into the dry one around it (HUL, Bahrain
-    2026). So in a race with wet running, a finisher classified on fewer dry C-numbers than the
-    rule needs counts too: the stewards applied the exemption."""
-    wet = set(laps.loc[laps["compound"].isin(WET), "driver"])
-    if not wet:
-        return wet
-    dry = laps.dropna(subset=["compound_c"]).groupby("driver")["compound_c"].nunique()
-    classified = results.loc[results["position"].notna(), "driver"]
-    return wet | {d for d in classified if dry.get(d, 0) < min_dry}
-
-
 def _first_start_lap(states: list[Snapshot], total_laps: int) -> int:
     """The first lap after which every running car is on a known dry set for the rest of the race.
     Raises NotSimulable when that leaves no lap to decide on (the app offers up to total - 2)."""
@@ -197,7 +184,7 @@ def build_sim(
     started = set(laps["driver"])
     results = tables.results[tables.results["driver"].isin(started)]
     rules = regulations.rules(tables.event.season, tables.event.round)
-    wet = _wet_tyres_used(laps, results, rules.min_dry_compounds)
+    wet = set(laps.loc[laps["compound"].isin(WET), "driver"])  # Art. 30.5 waiver
     cars = []
     for row in results.to_dict("records"):
         driver, team = str(row["driver"]), str(row["team_id"])

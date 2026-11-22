@@ -762,10 +762,10 @@ the rest of the race. The engine refuses earlier starts; the app, the debrief an
 backtest skip them. Seven races gained a simulation this way: 2024 R9 (from lap 47 of 70), 2024
 R12 (39 of 52), 2025 R12 (44 of 52), 2025 R13 (1 of 44, wet on lap 1 only), 2026 R5 (3 of 68),
 2026 R16 (9 of 55) and 2026 R19 (6 of 71, Stroll's last stint has no compound in OpenF1).
-`Car.wet_tyres_used` waives the two-dry-compound rule (Art. 30.5) per car. Aligning OpenF1 stints
-to pit records can fold a one-lap wet stint into the dry one around it (HUL, 2026 R16), so in a race
-with wet running a finisher classified on fewer dry C-numbers counts as having used wets. Fixing
-that alignment in ingestion is a canonical-table change left open. Rain itself is never sampled,
+`Car.wet_tyres_used` waives the two-dry-compound rule (Art. 30.5) for a car with laps on wet sets.
+Ingestion no longer moves a one-lap stint off its pit lap when the next stint starts on the out-lap:
+in 2026 R16 four cars fitted inters on the grid during the suspended start and pitted for slicks
+after lap 2, and the alignment had folded that lap into the dry stint before it. Rain itself is never sampled,
 and the first laps on a drying track are modelled as dry. Recalibrated with the new races: 81
 races scored (2025 R12 starts too late for any start point), overall log score −1.938 (was
 −1.930), coverage 0.486 / 0.785; the gate passes.

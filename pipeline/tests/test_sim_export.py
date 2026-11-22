@@ -174,23 +174,6 @@ def test_early_wet_running_moves_the_first_start_lap(
     assert [(s.lap, s.compound_c) for s in sim.cars[lec].stops] == [(15, 1), (40, 3)]
 
 
-def test_a_finisher_on_one_dry_compound_in_a_wet_race_ran_wet_tyres(
-    race_folder: Path, race_tables: RaceTables
-) -> None:
-    # A one-lap wet stint the stint alignment lost: VER shows only C3 yet was classified.
-    laps = race_tables.laps.copy()
-    laps.loc[laps["driver"] == "VER", "compound_c"] = 3
-    laps.loc[(laps["driver"] == "LEC") & (laps["lap"] == 1), ["compound", "compound_c"]] = [
-        "INTERMEDIATE",
-        pd.NA,
-    ]
-    sim = build(race_folder, replace(race_tables, laps=laps))
-    wet = {c.driver: c.wet_tyres_used for c in sim.cars}
-    assert wet == {"VER": True, "LEC": True, "SAR": False}
-    dry = build(race_folder, replace(race_tables, laps=laps.assign(compound="SOFT")))
-    assert not any(c.wet_tyres_used for c in dry.cars)  # no wet running: nothing to infer
-
-
 def test_a_dry_race_starts_after_lap_1(race_folder: Path, race_tables: RaceTables) -> None:
     sim = build(race_folder, race_tables)
     assert sim.first_start_lap == 1
