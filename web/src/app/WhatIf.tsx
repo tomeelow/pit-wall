@@ -16,6 +16,7 @@ import {
 import { tyreLabel } from "./compounds";
 import { LapField, percent, Pick, Segmented, signed } from "./Controls";
 import { Histogram } from "./Histogram";
+import { useT } from "./i18n";
 import { useRun } from "./hooks";
 import { evaluator, SEED } from "./lab";
 import { planLane } from "./plan";
@@ -43,6 +44,8 @@ export function WhatIf({
   fromLap: number;
   onLap: (lap: number) => void;
 }) {
+  const t = useT();
+  const { whatif: tx } = t;
   const actual = actualStrategies(race, fromLap)[car]!;
   const [edit, setEdit] = useState<{ fromLap: number; plan: Strategy }>({ fromLap, plan: actual });
   const plan = edit.fromLap === fromLap ? edit.plan : actual;
@@ -92,19 +95,19 @@ export function WhatIf({
     <div className="split">
       <section className="panel">
         <header>
-          <h2>Strategy from lap {fromLap}</h2>
+          <h2>{tx.from(fromLap)}</h2>
           <span className="sub">{race.cars[car]!.driver}</span>
         </header>
         <div className="body">
-          <LapField label="Decide after" laps={laps} value={fromLap} total={total} onChange={onLap} />
+          <LapField label={tx.decideAfter} laps={laps} value={fromLap} total={total} onChange={onLap} />
           <div className="lanes">
-            <p className="lane-name">Actual</p>
-            <StintLane laps={total} name="Actual strategy" stints={planLane(race, car, fromLap, actual)} tall />
-            <p className="lane-name">Alternative</p>
+            <p className="lane-name">{tx.actual}</p>
+            <StintLane laps={total} name={tx.actualLane} stints={planLane(t, race, car, fromLap, actual)} tall />
+            <p className="lane-name">{tx.alternative}</p>
             <StintLane
               laps={total}
-              name="Alternative strategy; drag the stops"
-              stints={planLane(race, car, fromLap, plan)}
+              name={tx.alternativeLane}
+              stints={planLane(t, race, car, fromLap, plan)}
               stops={stops}
               onMoveStop={move}
               tall
@@ -114,9 +117,9 @@ export function WhatIf({
           <table className="stops">
             <thead>
               <tr>
-                <th>Stop</th>
-                <th>End of lap</th>
-                <th>New set</th>
+                <th>{tx.stop}</th>
+                <th>{tx.endOfLap}</th>
+                <th>{tx.newSet}</th>
                 <th />
               </tr>
             </thead>
@@ -128,7 +131,7 @@ export function WhatIf({
                     <input
                       className="input num"
                       type="number"
-                      aria-label={`Stop ${k + 1} lap`}
+                      aria-label={tx.stopLap(k + 1)}
                       min={stops[k]!.min}
                       max={stops[k]!.max}
                       value={s.lap}
@@ -137,15 +140,15 @@ export function WhatIf({
                   </td>
                   <td>
                     <Pick
-                      label={`Stop ${k + 1} compound`}
+                      label={tx.stopCompound(k + 1)}
                       value={s.compound_c}
-                      options={race.compounds.map((c) => ({ value: c, label: tyreLabel(race.compounds, c) }))}
+                      options={race.compounds.map((c) => ({ value: c, label: tyreLabel(t, race.compounds, c) }))}
                       onChange={(c) => tyre(k, c)}
                     />
                   </td>
                   <td>
                     <button type="button" className="quiet" onClick={() => setPlan(plan.filter((_, i) => i !== k))}>
-                      Remove
+                      {tx.remove}
                     </button>
                   </td>
                 </tr>
@@ -154,93 +157,86 @@ export function WhatIf({
           </table>
           <div className="row">
             <button type="button" className="quiet" onClick={add}>
-              Add a stop
+              {tx.addStop}
             </button>
             <button type="button" className="quiet" onClick={() => setPlan(actual)}>
-              Back to the actual plan
+              {tx.backToActual}
             </button>
           </div>
           {rules.invalid.length > 0 ? (
             <ul className="rules rules-invalid">
-              {rules.invalid.map((m) => (
-                <li key={m}>{m}</li>
+              {rules.invalid.map((issue) => (
+                <li key={issue.kind}>{t.rule(issue)}</li>
               ))}
             </ul>
           ) : rules.breaks.length > 0 ? (
             <ul className="rules rules-break">
-              <li>The stewards would disqualify this plan, and so does the simulation:</li>
-              {rules.breaks.map((m) => (
-                <li key={m}>{m}</li>
+              <li>{tx.disqualified}</li>
+              {rules.breaks.map((issue) => (
+                <li key={issue.kind}>{t.rule(issue)}</li>
               ))}
             </ul>
           ) : (
-            <p className="rules rules-ok">Legal under this race’s rules.</p>
+            <p className="rules rules-ok">{tx.legal}</p>
           )}
           <Segmented
-            label="Safety cars and retirements"
+            label={tx.events}
             value={events}
             onChange={setEvents}
             options={[
-              { value: "sampled", label: "Drawn at random" },
-              { value: "realised", label: "As they happened" },
+              { value: "sampled", label: tx.sampled },
+              { value: "realised", label: tx.realised },
             ]}
           />
           <button type="button" className="primary" disabled={rules.invalid.length > 0} onClick={go}>
-            Run {runs.toLocaleString("en")} races
+            {tx.run(runs)}
           </button>
         </div>
       </section>
 
       <section className="panel" aria-live="polite">
         <header>
-          <h2>Finishing position</h2>
-          {result && (
-            <span className="sub num">
-              {result.actual.runs.toLocaleString("en")} races, the same draws for both plans
-            </span>
-          )}
+          <h2>{tx.finishing}</h2>
+          {result && <span className="sub num">{tx.sameDraws(result.actual.runs)}</span>}
         </header>
         {run.status === "error" && <Failure message={run.message} />}
         {!result && run.status !== "error" && (
-          <Empty title="No result yet">
-            Edit the alternative, then run it: both plans race the same {runs.toLocaleString("en")} simulated
-            races, and the difference is the answer.
-          </Empty>
+          <Empty title={tx.noResult}>{tx.noResultBody(runs)}</Empty>
         )}
         {result && (
           <>
             <div className="stats">
               <div>
                 <span className="figure good">{percent(result.ahead)}</span>
-                <span className="caption">of races the alternative finishes ahead</span>
+                <span className="caption">{tx.ahead}</span>
               </div>
               <div>
                 <span className="figure bad">{percent(result.behind)}</span>
-                <span className="caption">finishes behind</span>
+                <span className="caption">{tx.behind}</span>
               </div>
               <div>
                 <span className="figure">{signed(result.meanGain)}</span>
-                <span className="caption">places on average, &plusmn;{result.meanGainSe.toFixed(2)} (one standard error)</span>
+                <span className="caption">{tx.mean(result.meanGainSe.toFixed(2))}</span>
               </div>
             </div>
             <div className="body">
               <ul className="legend">
                 <li>
                   <i className="dot series-a" />
-                  Actual, expected P{result.actual.meanPosition.toFixed(2)}
+                  {tx.expected(tx.actual, result.actual.meanPosition.toFixed(2))}
                 </li>
                 <li>
                   <i className="dot series-b" />
-                  Alternative, expected P{result.alternative.meanPosition.toFixed(2)}
+                  {tx.expected(tx.alternative, result.alternative.meanPosition.toFixed(2))}
                 </li>
               </ul>
               <Histogram
                 series={[
-                  { name: "Actual", tone: "a", value: result.actual },
-                  { name: "Alternative", tone: "b", value: result.alternative },
+                  { name: tx.actual, tone: "a", value: result.actual },
+                  { name: tx.alternative, tone: "b", value: result.alternative },
                 ]}
               />
-              {run.status === "running" && <p className="sub">Simulating, {run.races.toLocaleString("en")} races so far</p>}
+              {run.status === "running" && <p className="sub">{tx.simulating(run.races)}</p>}
             </div>
           </>
         )}

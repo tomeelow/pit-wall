@@ -1,17 +1,18 @@
 import type { Race } from "../contract/race";
 import type { SimRace } from "../contract/sim";
 import { stintTyre, type Tyre } from "./compounds";
+import { useT, type Strings } from "./i18n";
 import { LapAxis, StintLane } from "./StintLane";
 
 const TYRES: Tyre[] = ["soft", "medium", "hard", "intermediate", "wet"];
 
-function neutralisations(sim: SimRace | null): string | null {
+function neutralisations(sim: SimRace | null, t: Strings): string | null {
   if (!sim || sim.realised.length === 0) return null;
   return sim.realised
     .map((p) =>
       p.start_lap === p.end_lap
-        ? `${p.kind} lap ${p.start_lap}`
-        : `${p.kind} laps ${p.start_lap} to ${p.end_lap}`,
+        ? t.race.periodOne(p.kind, p.start_lap)
+        : t.race.periodRange(p.kind, p.start_lap, p.end_lap),
     )
     .join(", ");
 }
@@ -28,22 +29,21 @@ export function RaceView({
   driver: string | null;
   onDriver: (code: string) => void;
 }) {
+  const t = useT();
   const used = TYRES.filter((t) => race.drivers.some((d) => d.stints.some((s) => stintTyre(s) === t)));
-  const periods = neutralisations(sim);
+  const periods = neutralisations(sim, t);
   return (
     <section className="panel">
       <header>
         <div>
-          <h2>
-            {race.name} {race.season}, {race.total_laps} laps
-          </h2>
+          <h2>{t.race.title(race.name, race.season, race.total_laps)}</h2>
           {periods && <p className="sub">{periods}</p>}
         </div>
         <ul className="legend">
-          {used.map((t) => (
-            <li key={t}>
-              <i className={`dot tyre-${t}`} />
-              {t}
+          {used.map((tyre) => (
+            <li key={tyre}>
+              <i className={`dot tyre-${tyre}`} />
+              {t.tyre[tyre]}
             </li>
           ))}
         </ul>
@@ -52,10 +52,10 @@ export function RaceView({
         <table className="grid">
           <thead>
             <tr>
-              <th className="r">Pos</th>
-              <th>Driver</th>
-              <th>Team</th>
-              <th className="r">Stops</th>
+              <th className="r">{t.race.pos}</th>
+              <th>{t.race.driver}</th>
+              <th>{t.race.team}</th>
+              <th className="r">{t.race.stops}</th>
               <th className="lane-head">
                 <LapAxis laps={race.total_laps} />
               </th>
@@ -75,12 +75,12 @@ export function RaceView({
                 <td className="lane-cell">
                   <StintLane
                     laps={race.total_laps}
-                    name={`${d.driver}: ${d.stints.map((s) => `${s.compound.toLowerCase()} laps ${s.start_lap} to ${s.end_lap}`).join(", ")}`}
+                    name={`${d.driver}: ${d.stints.map((s) => t.stintLaps(t.tyre[stintTyre(s)], s.start_lap, s.end_lap)).join(", ")}`}
                     stints={d.stints.map((s) => ({
                       from: s.start_lap,
                       to: s.end_lap,
                       tyre: stintTyre(s),
-                      label: s.compound.toLowerCase(),
+                      label: t.tyre[stintTyre(s)],
                     }))}
                   />
                 </td>

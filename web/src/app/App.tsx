@@ -1,31 +1,21 @@
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import type { Manifest } from "../contract/manifest";
 import { loadCalibration, loadManifest, loadRace, loadReplay, loadSim } from "./bundle";
 import { Debrief } from "./Debrief";
 import { useLoad } from "./hooks";
 import { ModelCard } from "./ModelCard";
 import { Optimise } from "./Optimise";
+import { I18n, initialLang, saveLang, STRINGS, useT, type Lang } from "./i18n";
 import { decisionLaps } from "./plan";
 import { RaceView } from "./RaceView";
 import { ReplayView } from "./Replay";
 import { Empty, Failure, Skeleton } from "./States";
 import { TelemetryView } from "./Telemetry";
 import { Undercut } from "./Undercut";
-import { raceKey, readView, writeView, type Tab, type View } from "./url";
+import { raceKey, readView, TABS, writeView, type View } from "./url";
 import { WhatIf } from "./WhatIf";
 
-const TAB_NAMES: Record<Tab, string> = {
-  race: "Race",
-  replay: "Replay",
-  telemetry: "Telemetry",
-  whatif: "What if",
-  optimise: "Optimise",
-  undercut: "Undercut",
-  debrief: "Debrief",
-  model: "Model card",
-};
-
-const STRATEGY_TABS: readonly Tab[] = ["whatif", "optimise", "undercut", "debrief"];
+const STRATEGY_TABS: readonly View["tab"][] = ["whatif", "optimise", "undercut", "debrief"];
 
 const MANIFEST = "manifest.json";
 
@@ -59,7 +49,30 @@ function useTheme(): [string, () => void] {
   return [theme, toggle];
 }
 
+function useLang(): [Lang, (lang: Lang) => void] {
+  const [lang, setLang] = useState(initialLang);
+  useEffect(() => {
+    document.documentElement.lang = lang;
+  }, [lang]);
+  const change = (next: Lang) => {
+    saveLang(next);
+    setLang(next);
+  };
+  return [lang, change];
+}
+
 export function App() {
+  const [lang, setLang] = useLang();
+  const t = STRINGS[lang];
+  return (
+    <I18n value={{ t, setLang }}>
+      <Shell />
+    </I18n>
+  );
+}
+
+function Shell() {
+  const t = useT();
   const manifest = useLoad(MANIFEST, loadManifest);
   return (
     <>
@@ -69,31 +82,35 @@ export function App() {
         <>
           <Bar />
           <main className="main">
-            {manifest.status === "error" ? <Failure message={manifest.message} /> : <Skeleton rows={12} label="Loading races" />}
+            {manifest.status === "error" ? <Failure message={manifest.message} /> : <Skeleton rows={12} label={t.app.loadingRaces} />}
           </main>
         </>
       )}
-      <footer className="footer">
-        Unofficial project, not affiliated with Formula 1. Data from OpenF1.
-      </footer>
+      <footer className="footer">{t.footer}</footer>
     </>
   );
 }
 
 function Bar({ children }: { children?: React.ReactNode }) {
   const [theme, toggle] = useTheme();
+  const { t, setLang } = useContext(I18n);
+  const other: Lang = t.lang === "en" ? "uk" : "en";
   return (
     <header className="bar">
       <span className="wordmark">Pit Wall</span>
       {children}
       <button type="button" className="quiet theme" onClick={toggle}>
-        {theme === "dark" ? "Light" : "Dark"}
+        {theme === "dark" ? t.light : t.dark}
+      </button>
+      <button type="button" className="quiet" lang={other} onClick={() => setLang(other)}>
+        {t.switchTo}
       </button>
     </header>
   );
 }
 
 function Lab({ manifest }: { manifest: Manifest }) {
+  const t = useT();
   const [view, change] = useView();
   const simulated = manifest.races.filter((r) => r.sim_path);
   const entry =
@@ -111,7 +128,7 @@ function Lab({ manifest }: { manifest: Manifest }) {
       <>
         <Bar />
         <main className="main">
-          <Empty title="No races exported yet">Run the weekend pipeline to publish a bundle.</Empty>
+          <Empty title={t.app.noRaces}>{t.app.noRacesBody}</Empty>
         </main>
       </>
     );
@@ -127,18 +144,12 @@ function Lab({ manifest }: { manifest: Manifest }) {
 
   const strategy = () => {
     if (sim.status === "none") {
-      return (
-        <Empty title="No simulation for this race">
-          The strategy tools need this race&rsquo;s model parameters, and it has none: it cannot be simulated
-          (a wet race, or missing timing), or it is new and the model has not been refreshed with it yet. Race,
-          replay and telemetry still work.
-        </Empty>
-      );
+      return <Empty title={t.app.noSim}>{t.app.noSimBody}</Empty>;
     }
-    if (sim.status === "loading") return <Skeleton rows={10} label="Loading the simulation" />;
+    if (sim.status === "loading") return <Skeleton rows={10} label={t.app.loadingSim} />;
     if (sim.status === "error") return <Failure message={sim.message} />;
     if (car < 0 || laps.length === 0) {
-      return <Empty title={`No race state for ${driver ?? "this driver"}`}>Pick a driver who started the race.</Empty>;
+      return <Empty title={t.app.noRaceState(driver)}>{t.app.noRaceStateBody}</Empty>;
     }
     const key = `${entry.path}:${driver}`;
     if (view.tab === "debrief") return <Debrief key={entry.path} race={sim.value} car={car} settings={manifest.strategy} />;
@@ -149,23 +160,14 @@ function Lab({ manifest }: { manifest: Manifest }) {
 
   const analytics = () => {
     if (replay.status === "none") {
-      return (
-        <Empty title="No replay for this race yet">
-          Replay and telemetry start from the race&rsquo;s fastest lap at pace. A wet race has none, and OpenF1 can be
-          missing a lap&rsquo;s location.
-        </Empty>
-      );
+      return <Empty title={t.app.noReplay}>{t.app.noReplayBody}</Empty>;
     }
-    if (replay.status === "loading") return <Skeleton rows={14} label="Loading the replay" />;
+    if (replay.status === "loading") return <Skeleton rows={14} label={t.app.loadingReplay} />;
     if (replay.status === "error") return <Failure message={replay.message} />;
-    if (race.status !== "ready") return <Skeleton rows={14} label="Loading the race" />;
+    if (race.status !== "ready") return <Skeleton rows={14} label={t.app.loadingRace} />;
     const onDriver = (d: string) => change({ driver: d, lap: null });
     if (view.tab === "replay" && replay.value.cars.length === 0) {
-      return (
-        <Empty title="No lap timing for this race">
-          The race state has no race times to place the cars by; telemetry still works.
-        </Empty>
-      );
+      return <Empty title={t.app.noTiming}>{t.app.noTimingBody}</Empty>;
     }
     if (view.tab === "replay") {
       return <ReplayView key={entry.path} race={race.value} replay={replay.value} driver={driver} onDriver={onDriver} />;
@@ -185,7 +187,7 @@ function Lab({ manifest }: { manifest: Manifest }) {
     <>
       <Bar>
         <label className="visually-hidden" htmlFor="race">
-          Race
+          {t.app.race}
         </label>
         <select
           id="race"
@@ -200,14 +202,14 @@ function Lab({ manifest }: { manifest: Manifest }) {
                 .map((r) => (
                   <option key={r.path} value={raceKey(r)}>
                     {r.name} {r.season}
-                    {r.sim_path ? "" : " (race view only)"}
+                    {r.sim_path ? "" : t.app.raceViewOnly}
                   </option>
                 ))}
             </optgroup>
           ))}
         </select>
         <label className="visually-hidden" htmlFor="driver">
-          Driver
+          {t.app.driver}
         </label>
         <select
           id="driver"
@@ -222,8 +224,8 @@ function Lab({ manifest }: { manifest: Manifest }) {
             </option>
           ))}
         </select>
-        <nav aria-label="Tools">
-          {(Object.keys(TAB_NAMES) as Tab[]).map((tab) => (
+        <nav aria-label={t.app.tools}>
+          {TABS.map((tab) => (
             <a
               key={tab}
               href={writeView({ ...view, tab })}
@@ -233,7 +235,7 @@ function Lab({ manifest }: { manifest: Manifest }) {
                 change({ tab });
               }}
             >
-              {TAB_NAMES[tab]}
+              {t.tabs[tab]}
             </a>
           ))}
         </nav>
@@ -245,7 +247,7 @@ function Lab({ manifest }: { manifest: Manifest }) {
           ) : race.status === "error" ? (
             <Failure message={race.message} />
           ) : (
-            <Skeleton rows={20} label="Loading the race" />
+            <Skeleton rows={20} label={t.app.loadingRace} />
           ))}
         {(view.tab === "replay" || view.tab === "telemetry") && analytics()}
         {STRATEGY_TABS.includes(view.tab) && strategy()}

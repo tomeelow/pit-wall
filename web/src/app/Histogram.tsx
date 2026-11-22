@@ -1,4 +1,5 @@
 import type { Distribution } from "../sim/index.ts";
+import { useT } from "./i18n";
 
 interface Series {
   name: string;
@@ -13,9 +14,10 @@ const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
 
 /** Where the car finished across the runs, one bar per place, actual and alternative side by side. */
 export function Histogram({ series }: { series: Series[] }) {
+  const t = useT();
   const first = series[0]!.value;
   const showDsq = series.some((s) => s.value.disqualified > 0);
-  const labels = [...first.places.map((_, k) => `P${k + 1}`), "Ret", ...(showDsq ? ["DSQ"] : [])];
+  const labels = [...first.places.map((_, k) => `P${k + 1}`), t.histogram.retired, ...(showDsq ? ["DSQ"] : [])];
   const shares = series.map(({ value }) =>
     [...value.places, value.notClassified, ...(showDsq ? [value.disqualified] : [])].map(
       (n) => n / value.runs,
@@ -28,7 +30,7 @@ export function Histogram({ series }: { series: Series[] }) {
   const summary = series
     .map((s, j) => {
       const row = shares[j]!;
-      return `${s.name}: most often ${labels[row.indexOf(Math.max(...row))]}`;
+      return t.histogram.mostOften(s.name, labels[row.indexOf(Math.max(...row))]!);
     })
     .join("; ");
 

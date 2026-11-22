@@ -4,6 +4,7 @@ import type { TelemetryLap } from "../contract/telemetry";
 import { loadTelemetry } from "./bundle";
 import { Pick, signed } from "./Controls";
 import { useLoad } from "./hooks";
+import { useT } from "./i18n";
 import { interpolate } from "./timing";
 import { Empty, Failure, Skeleton } from "./States";
 import { delta, distanceGrid, lapTime, minisectors, outlinePieces, pointAlong } from "./traces";
@@ -36,7 +37,8 @@ function Trace({
   area?: boolean;
   length: number;
 }) {
-  const label = `${channel.split("_")[0]} by distance, ${laps.map((l) => l.driver).join(" and ")}`;
+  const t = useT();
+  const label = t.telemetry.trace(channel, laps.map((l) => l.driver));
   const inset = area ? 0 : INSET;
   const y = (v: number) => height - inset - ((v - min) / (max - min)) * (height - 2 * inset);
   return (
@@ -83,8 +85,9 @@ export function TelemetryView({
   onVs: (code: string) => void;
   onDriver: (code: string) => void;
 }) {
+  const { telemetry: tx } = useT();
   const laps = replay.fastest_laps;
-  if (laps.length === 0) return <Empty title="No car data for this race">OpenF1 has no car data for these laps.</Empty>;
+  if (laps.length === 0) return <Empty title={tx.noData}>{tx.noDataBody}</Empty>;
   return <Laps replay={replay} driver={driver} vs={vs} onVs={onVs} onDriver={onDriver} />;
 }
 
@@ -101,10 +104,11 @@ function Laps({
   onVs: (code: string) => void;
   onDriver: (code: string) => void;
 }) {
+  const { telemetry: tx } = useT();
   const laps = replay.fastest_laps;
   const a = laps.find((l) => l.driver === driver) ?? laps[0]!;
   const b = laps.find((l) => l.driver === vs && l.driver !== a.driver) ?? laps.find((l) => l.driver !== a.driver);
-  const options = laps.map((l) => ({ value: l.driver, label: `${l.driver}, lap ${l.lap}, ${lapTime(l.lap_time_s)}` }));
+  const options = laps.map((l) => ({ value: l.driver, label: tx.option(l.driver, l.lap, lapTime(l.lap_time_s)) }));
   const first = useLoad(a.telemetry_path, loadTelemetry);
   const second = useLoad(b?.telemetry_path ?? null, loadTelemetry);
 
@@ -112,21 +116,21 @@ function Laps({
     <div className="split split-wide">
       <section className="panel">
         <header>
-          <h2>Fastest laps</h2>
-          <span className="sub">by distance from the line</span>
+          <h2>{tx.fastest}</h2>
+          <span className="sub">{tx.byDistance}</span>
         </header>
         <div className="body pickers">
-          <Pick label="Driver" value={a.driver} options={options} onChange={onDriver} />
-          {b && <Pick label="Against" value={b.driver} options={options.filter((o) => o.value !== a.driver)} onChange={onVs} />}
+          <Pick label={tx.driver} value={a.driver} options={options} onChange={onDriver} />
+          {b && <Pick label={tx.against} value={b.driver} options={options.filter((o) => o.value !== a.driver)} onChange={onVs} />}
         </div>
         {first.status === "error" || second.status === "error" ? (
           <Failure message={first.status === "error" ? first.message : second.status === "error" ? second.message : ""} />
         ) : first.status === "ready" && second.status === "ready" ? (
           <Compare a={first.value} b={second.value} />
         ) : first.status === "ready" && !b ? (
-          <p className="note sub">Only one driver has car data for this race.</p>
+          <p className="note sub">{tx.onlyOne}</p>
         ) : (
-          <Skeleton rows={12} label="Loading telemetry" />
+          <Skeleton rows={12} label={tx.loading} />
         )}
       </section>
       {first.status === "ready" && second.status === "ready" && <Sectors a={first.value} b={second.value} replay={replay} />}
@@ -135,6 +139,8 @@ function Laps({
 }
 
 function Compare({ a, b }: { a: TelemetryLap; b: TelemetryLap }) {
+  const t = useT();
+  const { telemetry: tx } = t;
   const [at, setAt] = useState<number | null>(null);
   const grid = distanceGrid(a, b, GRID);
   const length = grid.at(-1)!;
@@ -149,37 +155,34 @@ function Compare({ a, b }: { a: TelemetryLap; b: TelemetryLap }) {
         <div>
           <span className="figure num">{lapTime(a.lap_time_s)}</span>
           <span className="caption">
-            <b className="ink-a">{a.driver}</b>, lap {a.lap}
+            <b className="ink-a">{a.driver}</b>, {tx.lapN(a.lap)}
           </span>
         </div>
         <div>
           <span className="figure num">{lapTime(b.lap_time_s)}</span>
           <span className="caption">
-            <b className="ink-b">{b.driver}</b>, lap {b.lap}
+            <b className="ink-b">{b.driver}</b>, {tx.lapN(b.lap)}
           </span>
         </div>
         <div>
           <span className="figure num">{signed(b.lap_time_s - a.lap_time_s, 3)}</span>
-          <span className="caption">
-            {b.driver} against {a.driver}, s
-          </span>
+          <span className="caption">{tx.versus(b.driver, a.driver)}</span>
         </div>
       </div>
       <div className="readout num" aria-live="off">
         {at === null ? (
-          <span className="muted">Point at the charts to read both laps at one place on track.</span>
+          <span className="muted">{tx.point}</span>
         ) : (
           <>
-            <span>{(at / 1000).toFixed(2)} km</span>
+            <span>
+              {(at / 1000).toFixed(2)} {t.km}
+            </span>
             {[a, b].map((lap, k) => (
               <span key={lap.driver} className={k === 0 ? "ink-a" : "ink-b"}>
-                {lap.driver} {read(lap, "speed_kmh")} km/h, {read(lap, "throttle")}% throttle, gear {read(lap, "gear")}
-                {read(lap, "brake") ? ", braking" : ""}
+                {tx.reading(lap.driver, read(lap, "speed_kmh"), read(lap, "throttle"), read(lap, "gear"), read(lap, "brake") > 0)}
               </span>
             ))}
-            <span>
-              {b.driver} {gapAt! >= 0 ? "behind" : "ahead"} by {Math.abs(gapAt!).toFixed(3)} s
-            </span>
+            <span>{tx.gapReading(b.driver, gapAt! >= 0, Math.abs(gapAt!).toFixed(3))}</span>
           </>
         )}
       </div>
@@ -191,37 +194,34 @@ function Compare({ a, b }: { a: TelemetryLap; b: TelemetryLap }) {
         }}
         onPointerLeave={() => setAt(null)}
       >
-        <h3>Speed, km/h</h3>
+        <h3>{tx.speed}</h3>
         <Trace laps={[a, b]} channel="speed_kmh" height={160} min={50} max={360} length={length} />
-        <h3>Throttle, %</h3>
+        <h3>{tx.throttle}</h3>
         <Trace laps={[a, b]} channel="throttle" height={56} min={0} max={100} length={length} />
-        <h3>
-          Brake, {a.driver} then {b.driver}
-        </h3>
+        <h3>{tx.brake(a.driver, b.driver)}</h3>
         <Trace laps={[a]} channel="brake" height={14} min={0} max={1} step area length={length} />
         <Trace laps={[b]} channel="brake" height={14} min={0} max={1} step area length={length} />
-        <h3>Gear</h3>
+        <h3>{tx.gear}</h3>
         <Trace laps={[a, b]} channel="gear" height={64} min={1} max={8} step length={length} />
-        <h3>
-          Gap, s: above the line {b.driver} is behind
-        </h3>
-        <DeltaTrace values={gap} height={96} label={`Gap of ${b.driver} to ${a.driver} by distance`} />
+        <h3>{tx.gapTitle(b.driver)}</h3>
+        <DeltaTrace values={gap} height={96} label={tx.gapLabel(b.driver, a.driver)} />
         {at !== null && <span className="cursor" style={{ left: `${(at / length) * 100}%` }} />}
       </div>
       <div className="axis num">
-        <span style={{ left: "0%" }}>0 km</span>
+        <span style={{ left: "0%" }}>0 {t.km}</span>
         <span style={{ left: "50%" }}>{(length / 2000).toFixed(1)}</span>
-        <span style={{ left: "100%" }}>{(length / 1000).toFixed(1)} km</span>
+        <span style={{ left: "100%" }}>
+          {(length / 1000).toFixed(1)} {t.km}
+        </span>
       </div>
-      <p className="note sub">
-        Car data from OpenF1 at about four samples a second; brake is on or off. Distance integrates speed, so a
-        corner can sit a few metres apart on the two laps.
-      </p>
+      <p className="note sub">{tx.note}</p>
     </>
   );
 }
 
 function Sectors({ a, b, replay }: { a: TelemetryLap; b: TelemetryLap; replay: Replay }) {
+  const t = useT();
+  const { telemetry: tx } = t;
   const sectors = minisectors(a, b);
   const pieces = outlinePieces(replay.track, sectors.length);
   const length = sectors.at(-1)!.to_m;
@@ -232,10 +232,10 @@ function Sectors({ a, b, replay }: { a: TelemetryLap; b: TelemetryLap; replay: R
   return (
     <section className="panel">
       <header>
-        <h2>Who was faster where</h2>
-        <span className="sub">{sectors.length} minisectors of equal length</span>
+        <h2>{tx.where}</h2>
+        <span className="sub">{tx.minisectors(sectors.length)}</span>
       </header>
-      <TrackMap track={replay.track} label={`Minisectors coloured by the faster of ${a.driver} and ${b.driver}`} outline={false}>
+      <TrackMap track={replay.track} label={tx.mapLabel(a.driver, b.driver)} outline={false}>
         {pieces.map((points, k) => (
           <polyline key={k} className={`sector sector-${sectors[k]!.gain_s > 0 ? "a" : "b"}`} points={points} />
         ))}
@@ -246,19 +246,20 @@ function Sectors({ a, b, replay }: { a: TelemetryLap; b: TelemetryLap; replay: R
           const mine = won(k as 0 | 1);
           return (
             <li key={lap.driver}>
-              <b className={`ink-${k === 0 ? "a" : "b"}`}>{lap.driver}</b> faster in {mine.length}, gaining {mine.reduce((s, x) => s + Math.abs(x.gain_s), 0).toFixed(3)} s
+              <b className={`ink-${k === 0 ? "a" : "b"}`}>{lap.driver}</b>{" "}
+              {tx.fasterIn(mine.length, mine.reduce((s, x) => s + Math.abs(x.gain_s), 0).toFixed(3))}
             </li>
           );
         })}
       </ul>
       <table className="grid">
-        <caption className="caption">Largest differences</caption>
+        <caption className="caption">{tx.largest}</caption>
         <thead>
           <tr>
-            <th>Minisector</th>
-            <th className="r">From, km</th>
-            <th>Faster</th>
-            <th className="r">By, s</th>
+            <th>{tx.minisector}</th>
+            <th className="r">{tx.fromKm}</th>
+            <th>{tx.faster}</th>
+            <th className="r">{tx.by}</th>
           </tr>
         </thead>
         <tbody>
@@ -272,10 +273,7 @@ function Sectors({ a, b, replay }: { a: TelemetryLap; b: TelemetryLap; replay: R
           ))}
         </tbody>
       </table>
-      <p className="note sub">
-        The circle marks the line. Minisectors split {(length / 1000).toFixed(2)} km of each lap evenly and are laid
-        on the map by path length.
-      </p>
+      <p className="note sub">{tx.sectorsNote((length / 1000).toFixed(2))}</p>
     </section>
   );
 }

@@ -25,7 +25,7 @@ export { finishCounts, startLaps } from "./backtest.ts";
 export { candidates } from "./candidates.ts";
 export { debrief, EX_ANTE, EX_POST, type Decision, type Verdict } from "./debrief.ts";
 export { optimise, type Ranked, type Search, type SearchResult } from "./optimise.ts";
-export { checkRules, type RuleCheck } from "./rules.ts";
+export { checkRules, type BrokenRule, type InvalidPlan, type RuleCheck, type RuleIssue } from "./rules.ts";
 export {
   compare,
   counterfactual,

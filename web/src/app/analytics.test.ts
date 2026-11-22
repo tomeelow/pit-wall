@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Replay, TrackOutline } from "../contract/replay";
 import type { TelemetryLap } from "../contract/telemetry";
+import { STRINGS } from "./i18n";
 import { bisect, interpolate, pointAt, progressAt, standings } from "./timing";
 import { delta, distanceGrid, lapTime, minisectors, outlinePieces, pointAlong } from "./traces";
 
@@ -58,7 +59,8 @@ describe("replay", () => {
     });
     const order = standings(race, 300);
     expect(order.map((s) => s.driver)).toEqual(["LAP", "CLO", "SLO", "LAPPED", "OUT"]);
-    expect(order.map((s) => s.gap)).toEqual(["", "+3.0", "+30.0", "+1 lap", "+5.0"]);
+    expect(order.map((s) => STRINGS.en.gap(s.gap))).toEqual(["", "+3.0", "+30.0", "+1 lap", "+5.0"]);
+    expect(STRINGS.uk.gap(order[3]!.gap)).toBe("+1 коло");
     expect(order[4]!.progress.finished).toBe(true);
   });
 });
