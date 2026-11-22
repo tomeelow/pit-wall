@@ -143,8 +143,9 @@ def test_races_the_engine_cannot_run_are_refused(
     race_folder: Path, race_tables: RaceTables, tmp_path: Path
 ) -> None:
     laps = race_tables.laps.copy()
-    laps.loc[laps["lap"] == 10, "compound"] = "INTERMEDIATE"
-    with pytest.raises(NotSimulable, match="wet"):
+    last = laps["lap"] >= race_tables.event.total_laps - 1
+    laps.loc[last, ["compound", "compound_c"]] = ["INTERMEDIATE", pd.NA]
+    with pytest.raises(NotSimulable, match="wet or unknown tyres until lap"):
         build(race_folder, replace(race_tables, laps=laps))
     state = race_tables.race_state.copy()
     state.loc[(state["driver"] == "VER") & (state["lap"] == 20), "race_time_s"] = float("nan")
@@ -153,3 +154,44 @@ def test_races_the_engine_cannot_run_are_refused(
     unfitted = write_race(tmp_path / "unfitted", race_tables)
     with pytest.raises(NotSimulable, match="no degradation_draws"):
         build(unfitted, race_tables)
+
+
+def test_early_wet_running_moves_the_first_start_lap(
+    race_folder: Path, race_tables: RaceTables
+) -> None:
+    laps = race_tables.laps.copy()
+    first_stint = (laps["driver"] == "LEC") & (laps["lap"] <= 15)
+    laps.loc[first_stint, ["compound", "compound_c"]] = ["INTERMEDIATE", pd.NA]
+    sim = build(race_folder, replace(race_tables, laps=laps))
+    lec = [car.driver for car in sim.cars].index("LEC")
+    # LEC runs inters to the stop at the end of lap 15: the race is simulable from there.
+    assert sim.first_start_lap == 15
+    assert [car.wet_tyres_used for car in sim.cars][lec] and not sim.cars[0].wet_tyres_used
+    before, after = sim.snapshots[13], sim.snapshots[14]  # after laps 14 and 15
+    assert before.race_time_s[lec] is not None and before.compound_c[lec] is None
+    assert (after.compound_c[lec], after.stops[lec], after.dry_compounds[lec]) == (1, 1, [1])
+    # The stop off the inters is still planned; only stops onto wet sets have no C-number.
+    assert [(s.lap, s.compound_c) for s in sim.cars[lec].stops] == [(15, 1), (40, 3)]
+
+
+def test_a_finisher_on_one_dry_compound_in_a_wet_race_ran_wet_tyres(
+    race_folder: Path, race_tables: RaceTables
+) -> None:
+    # A one-lap wet stint the stint alignment lost: VER shows only C3 yet was classified.
+    laps = race_tables.laps.copy()
+    laps.loc[laps["driver"] == "VER", "compound_c"] = 3
+    laps.loc[(laps["driver"] == "LEC") & (laps["lap"] == 1), ["compound", "compound_c"]] = [
+        "INTERMEDIATE",
+        pd.NA,
+    ]
+    sim = build(race_folder, replace(race_tables, laps=laps))
+    wet = {c.driver: c.wet_tyres_used for c in sim.cars}
+    assert wet == {"VER": True, "LEC": True, "SAR": False}
+    dry = build(race_folder, replace(race_tables, laps=laps.assign(compound="SOFT")))
+    assert not any(c.wet_tyres_used for c in dry.cars)  # no wet running: nothing to infer
+
+
+def test_a_dry_race_starts_after_lap_1(race_folder: Path, race_tables: RaceTables) -> None:
+    sim = build(race_folder, race_tables)
+    assert sim.first_start_lap == 1
+    assert not any(car.wet_tyres_used for car in sim.cars)

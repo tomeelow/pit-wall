@@ -94,7 +94,7 @@ const en = {
   lapOf: (lap: number, total: number) => `Lap ${lap} of ${total}`,
   stintLaps: (tyre: string, from: number, to: number) => `${tyre}, laps ${from} to ${to}`,
   handle: (k: number, lap: number) => `Stop ${k}, end of lap ${lap}. Arrow keys move it.`,
-  toLap: (c: number, lap: number) => `C${c} to lap ${lap}`,
+  toLap: (set: string, lap: number) => `${set} to lap ${lap}`,
   gap: (gap: Gap) => (!gap ? "" : "laps" in gap ? `+${gap.laps} lap${gap.laps > 1 ? "s" : ""}` : `+${gap.seconds.toFixed(1)}`),
   rule: (issue: RuleIssue) => {
     switch (issue.kind) {
@@ -472,7 +472,7 @@ const uk: Strings = {
   lapOf: (lap, total) => `Коло ${lap} з ${total}`,
   stintLaps: (tyre, from, to) => `${tyre}, кола ${from}–${to}`,
   handle: (k, lap) => `Зупинка ${k}, кінець кола ${lap}. Стрілки її пересувають.`,
-  toLap: (c, lap) => `C${c} до кола ${lap}`,
+  toLap: (set, lap) => `${set} до кола ${lap}`,
   gap: (gap) => (!gap ? "" : "laps" in gap ? `+${gap.laps} ${laps(gap.laps)}` : `+${gap.seconds.toFixed(1)}`),
   rule: (issue) => {
     switch (issue.kind) {

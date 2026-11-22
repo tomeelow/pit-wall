@@ -1,6 +1,7 @@
 import type { StrategySettings } from "../contract/manifest";
 import type { PlannedStop, SimRace } from "../contract/sim";
 import type { Strategy } from "./prepare.ts";
+import { minDryCompounds } from "./rules.ts";
 
 /**
  * Plans for one car from the race state after `fromLap` that the rules allow: 0 to max_stops
@@ -22,9 +23,10 @@ export function candidates(
 ): Strategy[] {
   const snapshot = race.snapshots.find((s) => s.lap === fromLap);
   const compound = snapshot?.compound_c[car];
-  if (!snapshot || compound === null || compound === undefined) return [];
+  if (!snapshot || fromLap < race.first_start_lap || compound === null || compound === undefined) return [];
   const total = race.total_laps;
-  const { min_dry_compounds, min_stops, max_stint_laps } = race.rules;
+  const { min_stops, max_stint_laps } = race.rules;
+  const min_dry_compounds = minDryCompounds(race, car);
   const done = snapshot.stops[car] ?? 0;
   const stintSoFar = (snapshot.stint_laps[car] ?? 0) - fromLap; // + lap gives the stint's length
   const usedBefore = new Set(snapshot.dry_compounds[car] ?? []);

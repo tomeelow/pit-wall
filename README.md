@@ -34,7 +34,8 @@ Pick a race and a driver at the top of the page, then choose a tool:
 | **Debrief** | Every pit stop a driver made, judged twice: was it a good call with what was known then, and did it work out? |
 | **Model card** | How the models were fitted, and how well the simulator has predicted real races. |
 
-Wet and mixed-weather races show the race, replay and telemetry, but can't be simulated.
+Races that were wet to the end show the race, replay and telemetry, but can't be simulated. A race
+that dried out can be simulated from the lap after every car was back on dry tyres.
 
 ## Reading an answer
 
@@ -93,8 +94,10 @@ stays as it is. Where it is **too sure of itself**:
 - **Races where a safety car actually came out later.** When judging a call, the simulator doesn't
   know a safety car is coming; it can only allow for one at random. That's deliberate: a decision
   should be judged on what the team could know.
-- **Wet or mixed races** aren't simulated at all. Neither is Miami 2025, where the timing data has
-  gaps.
+- **Wet or mixed races** are simulated only after the rain: from the first lap after which every
+  car is on known dry tyres to the flag. Rain is never simulated, and the first dry laps on a
+  drying track are modelled as if fully dry. Races wet to the end aren't simulated, nor is Miami
+  2025, where the timing data has gaps.
 
 The scores behind this table (log scores and the full breakdown) are on the site's Model card and
 under Phase 7 in [the implementation plan](docs/implementation_plan.md).

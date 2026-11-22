@@ -35,7 +35,7 @@ export function syntheticRace(options: SyntheticOptions = {}): SimRace {
   const firstStint = (i: number) => (i % 2 === 0 ? 2 : 1);
   const stopLap = Math.floor(laps / 2);
   return {
-    schema_version: "0.6.0",
+    schema_version: "0.7.0",
     season: 2024,
     round: 1,
     name: "Synthetic Grand Prix",
@@ -99,6 +99,7 @@ export function syntheticRace(options: SyntheticOptions = {}): SimRace {
       stops: [{ lap: stopLap, compound_c: firstStint(i) === 2 ? 1 : 2, tyre_age: 0 }],
       finish_position: i + 1,
       retired_after_lap: null,
+      wet_tyres_used: false,
     })),
     snapshots: Array.from({ length: laps - 1 }, (_, k) => {
       const lap = k + 1;
@@ -114,6 +115,7 @@ export function syntheticRace(options: SyntheticOptions = {}): SimRace {
         dry_compounds: Array.from({ length: cars }, (_, i) => (stopped ? [1, 2] : [firstStint(i)])),
       };
     }),
+    first_start_lap: 1,
     realised: [],
   };
 }

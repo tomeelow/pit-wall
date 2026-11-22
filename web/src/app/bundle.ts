@@ -7,7 +7,7 @@ import type { TelemetryLap } from "../contract/telemetry";
 
 // Typed as the generated literal: when the pipeline bumps SCHEMA_VERSION, tsc fails here until
 // the app has been checked against the new contract.
-export const SUPPORTED_SCHEMA: Manifest["schema_version"] = "0.6.0";
+export const SUPPORTED_SCHEMA: Manifest["schema_version"] = "0.7.0";
 
 const major = (version: string) => version.split(".")[0];
 

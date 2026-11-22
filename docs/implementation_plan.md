@@ -747,14 +747,28 @@ Code: `pitwall.export.sim`.
 About 200 KB per race, 15 MB for all of them. The browser loads one at a time; budgets come in
 Phase 10.
 
-**76 of 90 races are simulable.** The 14 that are not:
+**82 of 90 races are simulable.** The 8 that are not:
 
 | Reason | Races |
 |---|---|
-| Wet running (no model covers intermediates or wets) | 10 |
+| Wet or unknown tyres until the last laps (2023 R6, R13; 2025 R1; 2026 R20) | 4 |
 | C6, which the degradation fit does not cover (2025 R8, R10) | 2 |
 | No degradation draws (2024 R21) | 1 |
-| A car on an unknown tyre mid-race (2026 R19) | 1 |
+| Race times missing (2025 R6) | 1 |
+
+**Partial races (2026-11, contract 0.7.0).** Wet or unknown tyres earlier in a race only move
+`SimRace.first_start_lap`: the first lap after which every running car is on a known dry set for
+the rest of the race. The engine refuses earlier starts; the app, the debrief and the calibration
+backtest skip them. Seven races gained a simulation this way: 2024 R9 (from lap 47 of 70), 2024
+R12 (39 of 52), 2025 R12 (44 of 52), 2025 R13 (1 of 44, wet on lap 1 only), 2026 R5 (3 of 68),
+2026 R16 (9 of 55) and 2026 R19 (6 of 71, Stroll's last stint has no compound in OpenF1).
+`Car.wet_tyres_used` waives the two-dry-compound rule (Art. 30.5) per car. Aligning OpenF1 stints
+to pit records can fold a one-lap wet stint into the dry one around it (HUL, 2026 R16), so in a race
+with wet running a finisher classified on fewer dry C-numbers counts as having used wets. Fixing
+that alignment in ingestion is a canonical-table change left open. Rain itself is never sampled,
+and the first laps on a drying track are modelled as dry. Recalibrated with the new races: 81
+races scored (2025 R12 starts too late for any start point), overall log score −1.938 (was
+−1.930), coverage 0.486 / 0.785; the gate passes.
 
 **Two fallbacks:**
 - A driver without a clean lap (an early retirement) gets the field-median pace of each draw,
@@ -970,8 +984,9 @@ The PIT histogram, in 10 bins, is close to flat with a slight U shape:
   change) remain a candidate for the late-race overconfidence, not a calibration emergency.
 
 **Scope and softenings:**
-- **Dry races only.** Mixed and wet races are not simulable, so the plan's "dry vs mixed" segment
-  has no mixed side. Track type is approximated by how easy passing is.
+- **Dry running only.** Mixed races are simulated only from after the rain (Phase 6 → partial
+  races), so the plan's "dry vs mixed" segment has no mixed side. Track type is approximated by how
+  easy passing is.
 - **Race-state gap.** Miami 2025 is refused by the exporter: OpenF1 race times are missing on lap 1
   and from lap 25. A car with no time at the line on a lap it went on from would vanish from the
   simulation, so the exporter now refuses such races. A possible Phase 2 follow-up is to rebuild

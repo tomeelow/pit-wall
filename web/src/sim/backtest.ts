@@ -33,16 +33,20 @@ export function finishCounts(
   return counts;
 }
 
-/** The start lap for each share of race distance: lap 1 for 0, never the last lap, no repeats. */
+/**
+ * The start lap for each share of race distance: lap 1 for 0, never the last lap, no repeats.
+ * A share that falls before the race's first start lap (wet or unknown tyres) is left out.
+ */
 export function startLaps(
   totalLaps: number,
   fractions: readonly number[],
+  firstLap = 1,
 ): { fraction: number; lap: number }[] {
   const seen = new Set<number>();
   const starts = [];
   for (const fraction of fractions) {
     const lap = Math.min(totalLaps - 1, Math.max(1, Math.round(fraction * totalLaps)));
-    if (seen.has(lap)) continue;
+    if (seen.has(lap) || lap < firstLap) continue;
     seen.add(lap);
     starts.push({ fraction, lap });
   }

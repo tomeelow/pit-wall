@@ -20,9 +20,10 @@ let illegal = 0;
 for (const entry of manifest.races) {
   if (!entry.sim_path) continue;
   const race = await load<SimRace>(entry.sim_path);
+  const from = race.first_start_lap;
   const outcome = runSimulations(race, {
-    fromLap: 1,
-    sets: [actualStrategies(race, 1)],
+    fromLap: from,
+    sets: [actualStrategies(race, from)],
     runs: 1,
     seed: 0,
     mode: { events: "realised", noise: false },
@@ -40,12 +41,12 @@ for (const entry of manifest.races) {
       .sort((a, b) => a.car.finish_position! - b.car.finish_position!)
       .map((f, k) => [f.car.driver, k + 1]),
   );
-  // Baseline: the order after lap 1, where every replay starts.
-  const lap1 = race.snapshots[0]!.race_time_s;
+  // Baseline: the order where the replay starts, after lap 1 unless the race began wet.
+  const atStart = race.snapshots[from - 1]!.race_time_s;
   const index = new Map(race.cars.map((car, i) => [car.driver, i]));
   const baselineRank = new Map(
     [...finishers]
-      .sort((a, b) => lap1[index.get(a.car.driver)!]! - lap1[index.get(b.car.driver)!]!)
+      .sort((a, b) => atStart[index.get(a.car.driver)!]! - atStart[index.get(b.car.driver)!]!)
       .map((f, k) => [f.car.driver, k + 1]),
   );
   let error = 0;
@@ -66,13 +67,13 @@ for (const entry of manifest.races) {
   const n = finishers.length;
   rows.push(
     `${race.season}-${String(race.round).padStart(2, "0")} ${race.name.padEnd(28)} ` +
-      `${n} finishers  mean |error| ${(error / n).toFixed(2)} (lap-1 order ${(baseline / n).toFixed(2)})  exact ${exact}/${n}` +
+      `${n} finishers  mean |error| ${(error / n).toFixed(2)} (start order ${(baseline / n).toFixed(2)})  exact ${exact}/${n}` +
       (dsq.length ? `  DSQ by the rules: ${dsq.join(", ")}` : ""),
   );
 }
 console.log(rows.join("\n"));
 console.log(
   `\n${rows.length} races, ${totalCars} finishers: mean |position error| ` +
-    `${(totalError / totalCars).toFixed(2)} (lap-1 order ${(totalBaseline / totalCars).toFixed(2)}), exact ${((100 * totalExact) / totalCars).toFixed(1)} %, ` +
+    `${(totalError / totalCars).toFixed(2)} (start order ${(totalBaseline / totalCars).toFixed(2)}), exact ${((100 * totalExact) / totalCars).toFixed(1)} %, ` +
     `actual strategies disqualified by the rules: ${illegal}`,
 );

@@ -37,4 +37,8 @@ describe("startLaps", () => {
       { fraction: 0.5, lap: 2 },
     ]);
   });
+
+  it("leaves out starts before a race's first start lap", () => {
+    expect(startLaps(60, [0, 0.25, 0.5], 20)).toEqual([{ fraction: 0.5, lap: 30 }]);
+  });
 });

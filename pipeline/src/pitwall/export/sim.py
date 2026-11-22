@@ -1,9 +1,10 @@
 """Per-race simulator inputs: the fitted models' draws, the actual strategies and the race state
 after every lap, joined into one `SimRace` for the TypeScript engine.
 
-A race the engine cannot simulate gets no file. Reasons: a model has no output for it, it had wet
-running (no model covers intermediates or wets), or a car ran a C-number the degradation fit
-does not cover.
+A race the engine cannot simulate gets no file. Reasons: a model has no output for it, a car is on
+wet or unknown tyres (no model covers them) until the last laps, or a car ran a C-number the
+degradation fit does not cover. Wet or unknown tyres earlier in the race only move the first lap a
+simulation may start from (SimRace.first_start_lap).
 """
 
 import json
@@ -50,19 +51,20 @@ class NotSimulable(Exception):
 @dataclass(frozen=True)
 class StintStart:
     lap: int
-    compound_c: int
+    compound_c: int | None  # None: wet or unknown tyres
     tyre_age: int  # laps on the set before this stint
 
 
 def stint_starts(laps: pd.DataFrame) -> list[StintStart]:
-    """One driver's stints, in order."""
+    """One driver's stints, in order, wet and unknown ones included."""
     starts = []
-    known = laps.dropna(subset=["stint", "compound_c"]).sort_values("lap")
-    for _, group in known.groupby("stint", sort=True):
+    for _, group in laps.dropna(subset=["stint"]).sort_values("lap").groupby("stint", sort=True):
         first = group.iloc[0]
+        known = group["compound_c"].dropna()
         # tyre_age counts the lap just completed, so the set had age - 1 laps beforehand.
-        age_before = int(first["tyre_age"]) - 1
-        starts.append(StintStart(int(first["lap"]), int(first["compound_c"]), age_before))
+        age_before = int(first["tyre_age"]) - 1 if pd.notna(first["tyre_age"]) else 0
+        compound = int(known.iloc[0]) if len(known) == len(group) else None
+        starts.append(StintStart(int(first["lap"]), compound, age_before))
     return starts
 
 
@@ -89,7 +91,7 @@ def snapshots(tables: RaceTables, drivers: list[str]) -> list[Snapshot]:
             ages.append(current.tyre_age + done if current else None)
             stint_laps.append(done if current else None)
             stops.append(max(0, len(started) - 1))
-            used.append(sorted({s.compound_c for s in started}))
+            used.append(sorted({s.compound_c for s in started if s.compound_c is not None}))
         out.append(
             Snapshot(
                 lap=lap,
@@ -111,6 +113,34 @@ def _per_draw(frame: pd.DataFrame, column: str, n: int, decimals: int) -> list[f
     return np.round(values, decimals).tolist()
 
 
+def _wet_tyres_used(laps: pd.DataFrame, results: pd.DataFrame, min_dry: int) -> set[str]:
+    """Drivers exempt from the two-dry-compound rule. Laps on wet sets show most; aligning OpenF1
+    stints to pit records can fold a one-lap wet stint into the dry one around it (HUL, Bahrain
+    2026). So in a race with wet running, a finisher classified on fewer dry C-numbers than the
+    rule needs counts too: the stewards applied the exemption."""
+    wet = set(laps.loc[laps["compound"].isin(WET), "driver"])
+    if not wet:
+        return wet
+    dry = laps.dropna(subset=["compound_c"]).groupby("driver")["compound_c"].nunique()
+    classified = results.loc[results["position"].notna(), "driver"]
+    return wet | {d for d in classified if dry.get(d, 0) < min_dry}
+
+
+def _first_start_lap(states: list[Snapshot], total_laps: int) -> int:
+    """The first lap after which every running car is on a known dry set for the rest of the race.
+    Raises NotSimulable when that leaves no lap to decide on (the app offers up to total - 2)."""
+    blind = [
+        s.lap
+        for s in states
+        for t, c in zip(s.race_time_s, s.compound_c, strict=True)
+        if t is not None and c is None
+    ]
+    first = max(blind, default=0) + 1
+    if first > total_laps - 2:
+        raise NotSimulable(f"wet or unknown tyres until lap {first - 1} of {total_laps}")
+    return first
+
+
 def build_sim(
     path: Path, tables: RaceTables, regulations: Regulations, config: SimConfig
 ) -> SimRace:
@@ -119,11 +149,6 @@ def build_sim(
     if missing:
         raise NotSimulable(f"no {', '.join(missing)}")
     laps = tables.laps
-    if laps["compound"].isin(WET).any():
-        raise NotSimulable("wet running")
-    # Simulations start after lap 1: a car that retired on lap 1 on unknown tyres never runs.
-    if laps.loc[laps["lap"] > 1, "compound_c"].isna().any():
-        raise NotSimulable("laps after the first without a C-number")
     # A car with no time at the line on a lap it went on from would vanish from the simulation.
     state = tables.race_state
     last_lap = state.groupby("driver")["lap"].transform("max")
@@ -171,6 +196,8 @@ def build_sim(
 
     started = set(laps["driver"])
     results = tables.results[tables.results["driver"].isin(started)]
+    rules = regulations.rules(tables.event.season, tables.event.round)
+    wet = _wet_tyres_used(laps, results, rules.min_dry_compounds)
     cars = []
     for row in results.to_dict("records"):
         driver, team = str(row["driver"]), str(row["team_id"])
@@ -190,14 +217,20 @@ def build_sim(
                 pace_s=pace,
                 slope_s_per_lap=[slope(driver, team, c) for c in compounds],
                 dnf_rate_per_lap=rate(hazards.DNF, f"team:{era.name}:{team}"),
+                # A stop onto wet or unknown tyres has no C-number to plan with. It comes before
+                # first_start_lap, so no simulation replays it; snapshots still count it.
                 stops=[
                     PlannedStop(lap=s.lap - 1, compound_c=s.compound_c, tyre_age=s.tyre_age)
                     for s in stints[1:]
+                    if s.compound_c is not None
                 ],
                 finish_position=None if pd.isna(position) else int(position),
                 retired_after_lap=int(row["laps_completed"]) if row["status"] == "DNF" else None,
+                wet_tyres_used=driver in wet,
             )
         )
+    states = snapshots(tables, [car.driver for car in cars])
+    first_start_lap = _first_start_lap(states, tables.event.total_laps)
 
     lap_factor = events["neutralised_lap_factor"]
     durations = events["duration_laps"]
@@ -210,7 +243,7 @@ def build_sim(
         total_laps=tables.event.total_laps,
         dataset_version=tables.fingerprint(),
         draws=n,
-        rules=Rules(**regulations.rules(tables.event.season, tables.event.round).model_dump()),
+        rules=Rules(**rules.model_dump()),
         mechanics=Mechanics(follow_gap_s=config.follow_gap_s, restart_gap_s=config.restart_gap_s),
         compounds=compounds,
         degradation=Degradation(
@@ -265,7 +298,8 @@ def build_sim(
             beta_within_drs=per_draw(traffic_draws, "beta_within_drs"),
         ),
         cars=cars,
-        snapshots=snapshots(tables, [car.driver for car in cars]),
+        snapshots=states,
+        first_start_lap=first_start_lap,
         realised=[
             Neutralisation(kind=r["kind"], start_lap=int(r["start_lap"]), end_lap=int(r["end_lap"]))
             for r in tables.neutralisations.to_dict("records")

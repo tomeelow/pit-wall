@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   checkRules,
   DSQ,
+  prepare,
   runSimulations,
   withStrategy,
   type Mode,
@@ -42,6 +43,28 @@ describe("checkRules", () => {
       });
       expect(breaks.length > 0).toBe(outcome.status[0] === DSQ);
     }
+  });
+
+  it("waives the two-compound rule for a car that ran wet tyres, as the engine does", () => {
+    const plan = [{ lap: 15, compound_c: running, tyre_age: 0 }];
+    expect(checkRules(race, 0, fromLap, plan).breaks).toEqual([{ kind: "compounds", used: 1, need: 2 }]);
+    const wet = structuredClone(race);
+    wet.cars[0]!.wet_tyres_used = true;
+    expect(checkRules(wet, 0, fromLap, plan).breaks).toEqual([]);
+    const outcome = runSimulations(wet, {
+      fromLap,
+      sets: [withStrategy(wet, fromLap, 0, plan)],
+      runs: 1,
+      seed: 1,
+      mode: REPLAY,
+    });
+    expect(outcome.status[0]).not.toBe(DSQ);
+  });
+
+  it("never starts before the race's first start lap", () => {
+    const late = { ...race, first_start_lap: fromLap + 1 };
+    expect(() => prepare(late, fromLap)).toThrow(/no race state to simulate from/);
+    expect(() => prepare(late, fromLap + 1)).not.toThrow();
   });
 
   it("names each broken rule, and refuses plans the engine cannot run", () => {
