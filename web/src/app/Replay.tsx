@@ -3,6 +3,7 @@ import type { Race } from "../contract/race";
 import type { Replay } from "../contract/replay";
 import { stintTyre } from "./compounds";
 import { Segmented } from "./Controls";
+import { useT } from "./i18n";
 import {
   lapStart,
   lastLine,
@@ -69,6 +70,8 @@ export function ReplayView({
   driver: string | null;
   onDriver: (code: string) => void;
 }) {
+  const tr = useT();
+  const { replay: tx } = tr;
   const end = lastLine(replay);
   const [t, setT, playing, toggle, speed, setSpeed] = usePlayback(replay, end);
   const order = standings(replay, t);
@@ -85,13 +88,13 @@ export function ReplayView({
       <section className="panel">
         <header>
           <h2>
-            Lap <span className="num">{lap}</span> of <span className="num">{race.total_laps}</span>
+            {tr.lap} <span className="num">{lap}</span> {tr.of} <span className="num">{race.total_laps}</span>
           </h2>
           <span className={`sub${period ? " flagged" : ""}`}>
-            {period ? `${period.kind === "RED" ? "Red flag" : period.kind === "SC" ? "Safety car" : "Virtual safety car"}` : "Green"}
+            {period ? (period.kind === "RED" ? tx.red : period.kind === "SC" ? tx.sc : tx.vsc) : tx.green}
           </span>
         </header>
-        <TrackMap track={replay.track} label={`Track map, every car on lap ${lap}`}>
+        <TrackMap track={replay.track} label={tx.map(lap)}>
           {[...order].reverse().map(({ driver: code, progress }) => {
             if (progress.finished && status.get(code) !== "Finished") return null;
             const p = pointAt(replay.track, progress.finished ? 0 : progress.fraction);
@@ -118,7 +121,7 @@ export function ReplayView({
                 className={`band band-${n.kind.toLowerCase()}`}
                 style={{ left: at(n.start_lap), width: `${((n.end_lap - n.start_lap + 1) / race.total_laps) * 100}%` }}
               >
-                {n.kind === "RED" ? "Red" : n.kind}
+                {n.kind === "RED" ? tx.redBand : n.kind}
               </span>
             ))}
             {pits.map((p) => (
@@ -127,7 +130,7 @@ export function ReplayView({
             <span className="now" style={{ left: `${(t / end) * 100}%` }} />
           </div>
           <label className="visually-hidden" htmlFor="race-time">
-            Race time
+            {tx.time}
           </label>
           <input
             id="race-time"
@@ -137,35 +140,34 @@ export function ReplayView({
             max={end}
             step={0.5}
             value={t}
-            aria-valuetext={`Lap ${lap} of ${race.total_laps}`}
+            aria-valuetext={tr.lapOf(lap, race.total_laps)}
             onChange={(e) => setT(Number(e.target.value))}
           />
           <div className="row">
             <button type="button" className="quiet" onClick={toggle}>
-              {playing ? "Pause" : t >= end ? "Replay" : "Play"}
+              {playing ? tx.pause : t >= end ? tx.again : tx.play}
             </button>
-            <Segmented label="Speed" value={speed} onChange={setSpeed} options={SPEEDS} />
+            <Segmented label={tx.speed} value={speed} onChange={setSpeed} options={SPEEDS} />
           </div>
           <p className="sub">
-            {pits.length > 0 && `Ticks mark ${driver}'s stops. `}Cars run on official lap times along the
-            fastest lap's line ({replay.track.driver}, lap {replay.track.lap}); inside a lap, and through the pit
-            lane, their position is an estimate.
+            {pits.length > 0 && driver && tx.ticks(driver)}
+            {tx.line(replay.track.driver, replay.track.lap)}
           </p>
         </div>
       </section>
 
       <section className="panel">
         <header>
-          <h2>Order</h2>
-          <span className="sub">gap at the last line crossed</span>
+          <h2>{tx.order}</h2>
+          <span className="sub">{tx.gapNote}</span>
         </header>
         <table className="grid order">
           <thead>
             <tr>
-              <th className="r">Pos</th>
-              <th>Driver</th>
-              <th className="r">Gap</th>
-              <th>Tyre</th>
+              <th className="r">{tr.race.pos}</th>
+              <th>{tr.race.driver}</th>
+              <th className="r">{tx.gap}</th>
+              <th>{tx.tyre}</th>
               <th />
             </tr>
           </thead>
@@ -182,15 +184,15 @@ export function ReplayView({
                       {code}
                     </button>
                   </td>
-                  <td className="r num">{out ? "Out" : progress.finished && k > 0 ? "" : gap}</td>
+                  <td className="r num">{out ? tx.out : progress.finished && k > 0 ? "" : tr.gap(gap)}</td>
                   <td>
                     {tyre && (
                       <>
-                        <i className={`dot tyre-${stintTyre(tyre)}`} /> {stintTyre(tyre)}
+                        <i className={`dot tyre-${stintTyre(tyre)}`} /> {tr.tyre[stintTyre(tyre)]}
                       </>
                     )}
                   </td>
-                  <td className="muted">{!out && !progress.finished && pitting(own, progress.lap) ? "Pit" : ""}</td>
+                  <td className="muted">{!out && !progress.finished && pitting(own, progress.lap) ? tx.pit : ""}</td>
                 </tr>
               );
             })}

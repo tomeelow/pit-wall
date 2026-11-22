@@ -4,6 +4,7 @@ import type { SimRace } from "../contract/sim";
 import { candidates, EX_ANTE, optimise, type Objective, type Ranked, type SearchResult } from "../sim/index.ts";
 import { LapField, percent, Pick, Segmented, signed } from "./Controls";
 import { Spark } from "./Histogram";
+import { useT } from "./i18n";
 import { useRun } from "./hooks";
 import { evaluator, SEED } from "./lab";
 import { describePlan, planLane, planSegments } from "./plan";
@@ -28,6 +29,8 @@ export function Optimise({
   fromLap: number;
   onLap: (lap: number) => void;
 }) {
+  const t = useT();
+  const { optimise: tx } = t;
   const [kind, setKind] = useState<Kind>("position");
   const rivals = race.cars.map((c, i) => ({ value: i, label: c.driver })).filter((o) => o.value !== car);
   const [rival, setRival] = useState(rivals[0]!.value);
@@ -37,7 +40,7 @@ export function Optimise({
   const go = () =>
     start(async ({ ticket, addRaces }) => {
       const options = candidates(race, car, fromLap, settings);
-      if (options.length === 0) throw new Error(`${race.cars[car]!.driver} is not running after lap ${fromLap}.`);
+      if (options.length === 0) throw new Error(tx.notRunning(race.cars[car]!.driver, fromLap));
       const search = { car, fromLap, candidates: options, objective, mode: EX_ANTE, seed: SEED, settings };
       const found = await optimise(race, search, evaluator(race, ticket, addRaces));
       return { ...found, tried: options.length, objective };
@@ -50,8 +53,8 @@ export function Optimise({
       <tr key={rank} className={actual ? "pinned" : undefined}>
         <td>{rank}</td>
         <td className="plan-cell">
-          <StintLane laps={race.total_laps} name={describePlan(segments)} stints={planLane(race, car, fromLap, r.strategy)} />
-          <span className="plan-text">{describePlan(segments)}</span>
+          <StintLane laps={race.total_laps} name={describePlan(t, segments)} stints={planLane(t, race, car, fromLap, r.strategy)} />
+          <span className="plan-text">{describePlan(t, segments)}</span>
         </td>
         <td className="r num">{segments.length - 1}</td>
         <td className="r num big">{d.meanPosition.toFixed(2)}</td>
@@ -74,74 +77,64 @@ export function Optimise({
     <div className="split split-narrow">
       <section className="panel">
         <header>
-          <h2>Search</h2>
+          <h2>{tx.search}</h2>
         </header>
         <div className="body">
           <Segmented
-            label="Optimise for"
+            label={tx.target}
             value={kind}
             onChange={setKind}
             options={[
-              { value: "position", label: "Position" },
-              { value: "podium", label: "Podium" },
-              { value: "points", label: "Points" },
-              { value: "beat", label: "Beat a rival" },
+              { value: "position", label: tx.position },
+              { value: "podium", label: tx.podium },
+              { value: "points", label: tx.points },
+              { value: "beat", label: tx.beat },
             ]}
           />
-          {kind === "beat" && <Pick label="Rival" value={rival} options={rivals} onChange={setRival} />}
-          <LapField label="Decide after" laps={laps} value={fromLap} total={race.total_laps} onChange={onLap} />
-          <p className="sub">
-            0 to {settings.max_stops} stops in all, stints of {settings.min_stint_laps} laps or more, on
-            compounds run for {settings.min_race_clean_laps} clean laps or more in this race.
-          </p>
+          {kind === "beat" && <Pick label={tx.rival} value={rival} options={rivals} onChange={setRival} />}
+          <LapField label={t.whatif.decideAfter} laps={laps} value={fromLap} total={race.total_laps} onChange={onLap} />
+          <p className="sub">{tx.space(settings.max_stops, settings.min_stint_laps, settings.min_race_clean_laps)}</p>
           <button type="button" className="primary" onClick={go} disabled={run.status === "running"}>
-            {run.status === "running" ? "Searching" : "Search"}
+            {run.status === "running" ? tx.searching : tx.search}
           </button>
           {run.status !== "idle" && run.status !== "error" && (
-            <p className="sub num">{run.races.toLocaleString("en")} races simulated</p>
+            <p className="sub num">{tx.simulated(run.races)}</p>
           )}
         </div>
       </section>
 
       <section className="panel" aria-live="polite">
         <header>
-          <h2>Best plans from lap {fromLap}</h2>
-          {run.status === "done" && (
-            <span className="sub num">
-              {run.result.tried.toLocaleString("en")} plans tried; finalists raced {settings.max_runs.toLocaleString("en")} times on the same draws
-            </span>
-          )}
+          <h2>{tx.best(fromLap)}</h2>
+          {run.status === "done" && <span className="sub num">{tx.tried(run.result.tried, settings.max_runs)}</span>}
         </header>
         {run.status === "idle" && (
-          <Empty title="No search yet">
-            Every legal plan races a few times; the better ones race again on more draws until{" "}
-            {settings.keep} are left, then they race the actual plan.
-          </Empty>
+          <Empty title={tx.noSearch}>{tx.noSearchBody(settings.keep)}</Empty>
         )}
-        {run.status === "running" && <Skeleton rows={settings.keep + 1} label="Searching" />}
+        {run.status === "running" && <Skeleton rows={settings.keep + 1} label={tx.searching} />}
         {run.status === "error" && <Failure message={run.message} />}
         {run.status === "done" && (
           <div className="scroll">
             <table className="grid ranked">
               <thead>
                 <tr>
-                  <th>Rank</th>
-                  <th>Plan</th>
-                  <th className="r">Stops</th>
-                  <th className="r">Expected position</th>
-                  <th className="r">Win</th>
-                  <th className="r">Podium</th>
-                  <th className="r">Points</th>
+                  <th>{tx.rank}</th>
+                  <th>{tx.plan}</th>
+                  <th className="r">{tx.stops}</th>
+                  <th className="r">{tx.expected}</th>
+                  <th className="r">{tx.win}</th>
+                  <th className="r">{tx.podium}</th>
+                  <th className="r">{tx.points}</th>
                   {run.result.objective.kind === "beat" && (
-                    <th className="r">Beat {race.cars[(run.result.objective as { rival: number }).rival]!.driver}</th>
+                    <th className="r">{tx.beatRival(race.cars[(run.result.objective as { rival: number }).rival]!.driver)}</th>
                   )}
-                  <th className="r">Places vs actual</th>
-                  <th>P1 to P5, then the rest</th>
+                  <th className="r">{tx.versusActual}</th>
+                  <th>{tx.spread}</th>
                 </tr>
               </thead>
               <tbody>
                 {run.result.ranked.map((r, k) => row(r, String(k + 1), false))}
-                {row(run.result.actual, "Actual", true)}
+                {row(run.result.actual, tx.actual, true)}
               </tbody>
             </table>
           </div>

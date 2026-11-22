@@ -1,4 +1,5 @@
 import type { Stint } from "../contract/race";
+import type { Strings } from "./i18n";
 
 export type Tyre = "soft" | "medium" | "hard" | "intermediate" | "wet" | "unknown";
 
@@ -14,7 +15,7 @@ export function dryTyre(compounds: readonly number[], c: number): Tyre {
   return k === ranked.length - 1 ? "hard" : "medium";
 }
 
-export const tyreLabel = (compounds: readonly number[], c: number) =>
-  `C${c} ${dryTyre(compounds, c)}`;
+export const tyreLabel = (t: Strings, compounds: readonly number[], c: number) =>
+  `C${c} ${t.tyre[dryTyre(compounds, c)]}`;
 
 export const stintTyre = (stint: Stint) => stint.compound.toLowerCase() as Tyre;

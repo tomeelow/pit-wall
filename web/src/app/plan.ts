@@ -1,6 +1,7 @@
 import type { SimRace } from "../contract/sim";
 import type { Strategy } from "../sim/index.ts";
 import { dryTyre, tyreLabel } from "./compounds";
+import type { Strings } from "./i18n";
 import type { LaneStint } from "./StintLane";
 
 /** Laps from..to inclusive on one set. */
@@ -33,9 +34,9 @@ export function planSegments(
 }
 
 /** "C4 to lap 15, C3 to 36, C4" */
-export function describePlan(segments: readonly Segment[]): string {
+export function describePlan(t: Strings, segments: readonly Segment[]): string {
   return segments
-    .map((s, k) => (k === segments.length - 1 ? `C${s.compound}` : `C${s.compound} to lap ${s.to}`))
+    .map((s, k) => (k === segments.length - 1 ? `C${s.compound}` : t.toLap(s.compound, s.to)))
     .join(", ");
 }
 
@@ -47,12 +48,12 @@ export function decisionLaps(race: SimRace, car: number): number[] {
 }
 
 /** A plan as a lane: the laps before the decision are history, drawn as such. */
-export function planLane(race: SimRace, car: number, fromLap: number, plan: Strategy): LaneStint[] {
+export function planLane(t: Strings, race: SimRace, car: number, fromLap: number, plan: Strategy): LaneStint[] {
   return planSegments(race, car, fromLap, plan).map((s) => ({
     from: s.from,
     to: s.to,
     tyre: dryTyre(race.compounds, s.compound),
-    label: tyreLabel(race.compounds, s.compound),
+    label: tyreLabel(t, race.compounds, s.compound),
     past: s.to <= fromLap,
   }));
 }

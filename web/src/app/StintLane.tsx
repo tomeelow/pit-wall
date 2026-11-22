@@ -1,5 +1,6 @@
 import { useRef, type KeyboardEvent, type PointerEvent } from "react";
 import type { Tyre } from "./compounds";
+import { useT } from "./i18n";
 
 export interface LaneStint {
   from: number;
@@ -24,6 +25,7 @@ const at = (lap: number, laps: number) => `${(lap / laps) * 100}%`;
 
 /** One car's race as stints across the laps; with onMoveStop, its planned pit laps can be dragged. */
 export function StintLane({ stints, laps, name, tall, stops, onMoveStop }: Props) {
+  const t = useT();
   const lane = useRef<HTMLDivElement>(null);
   const lapAt = (clientX: number) => {
     const box = lane.current!.getBoundingClientRect();
@@ -52,7 +54,7 @@ export function StintLane({ stints, laps, name, tall, stops, onMoveStop }: Props
           key={s.from}
           className={`stint tyre-${s.tyre}${s.past ? " stint-past" : ""}`}
           style={{ left: at(s.from - 1, laps), width: at(s.to - s.from + 1, laps) }}
-          title={`${s.label}, laps ${s.from} to ${s.to}`}
+          title={t.stintLaps(s.label, s.from, s.to)}
         >
           {s.to - s.from >= 5 && <span>{s.label.split(" ")[0]}</span>}
         </div>
@@ -64,7 +66,7 @@ export function StintLane({ stints, laps, name, tall, stops, onMoveStop }: Props
             type="button"
             className="handle"
             style={{ left: at(stop.lap, laps) }}
-            aria-label={`Stop ${k + 1}, end of lap ${stop.lap}. Arrow keys move it.`}
+            aria-label={t.handle(k + 1, stop.lap)}
             onPointerDown={(e) => e.currentTarget.setPointerCapture(e.pointerId)}
             onPointerMove={drag(k)}
             onKeyDown={nudge(k)}

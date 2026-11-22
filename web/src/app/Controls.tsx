@@ -1,4 +1,5 @@
 import { useId } from "react";
+import { useT } from "./i18n";
 
 /** A row of radio buttons styled as one control. */
 export function Segmented<T extends string>({
@@ -49,13 +50,14 @@ export function LapField({
   onChange: (lap: number) => void;
 }) {
   const id = useId();
+  const t = useT();
   return (
     <div className="field">
       <label htmlFor={id}>{label}</label>
       <select id={id} className="input" value={value} onChange={(e) => onChange(Number(e.target.value))}>
         {laps.map((lap) => (
           <option key={lap} value={lap}>
-            Lap {lap} of {total}
+            {t.lapOf(lap, total)}
           </option>
         ))}
       </select>

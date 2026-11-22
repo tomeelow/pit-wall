@@ -48,9 +48,9 @@ describe("checkRules", () => {
     expect(checkRules(race, 0, fromLap, [])).toEqual({
       invalid: [],
       breaks: [
-        "Uses 1 dry compound; the rules need 2.",
-        "Makes 0 stops; the rules need 1.",
-        "Runs a 30-lap stint; the limit is 20.",
+        { kind: "compounds", used: 1, need: 2 },
+        { kind: "stops", made: 0, need: 1 },
+        { kind: "stint", laps: 30, limit: 20 },
       ],
     });
     const backwards = [
@@ -59,7 +59,7 @@ describe("checkRules", () => {
     ];
     expect(checkRules(race, 0, fromLap, backwards).invalid).toHaveLength(1);
     expect(checkRules(race, 0, fromLap, [{ lap: 12, compound_c: 9, tyre_age: 0 }]).invalid).toEqual(
-      ["C9 was not allocated for this race."],
+      [{ kind: "not-allocated", compound: 9 }],
     );
   });
 });

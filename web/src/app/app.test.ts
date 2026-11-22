@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { syntheticRace } from "../sim/synthetic.ts";
 import { dryTyre } from "./compounds";
+import { STRINGS } from "./i18n";
 import { decisionLaps, describePlan, planSegments } from "./plan";
 import { readView, writeView } from "./url";
 
@@ -39,7 +40,8 @@ describe("planSegments", () => {
       { from: 9, to: 20, compound: high },
       { from: 21, to: 30, compound: low },
     ]);
-    expect(describePlan(segments)).toBe(`C${start} to lap 8, C${high} to lap 20, C${low}`);
+    expect(describePlan(STRINGS.en, segments)).toBe(`C${start} to lap 8, C${high} to lap 20, C${low}`);
+    expect(describePlan(STRINGS.uk, segments)).toBe(`C${start} до кола 8, C${high} до кола 20, C${low}`);
   });
 
   it("offers only laps with a race state, leaving room for the last stop", () => {

@@ -70,8 +70,11 @@ export const laps = (p: Progress) => p.lap - 1 + p.fraction;
 export interface Standing {
   driver: string;
   progress: Progress;
-  gap: string; // to the leader at the last line both crossed
+  gap: Gap; // to the leader at the last line both crossed
 }
+
+/** Laps down once lapped, else seconds; null for the leader and a car yet to cross the line. */
+export type Gap = { laps: number } | { seconds: number } | null;
 
 /** The running order at race time t. Cars that stopped short keep the place they stopped in. */
 export function standings(replay: Replay, t: number): Standing[] {
@@ -81,18 +84,18 @@ export function standings(replay: Replay, t: number): Standing[] {
   return rows.map(({ car, progress }) => ({
     driver: car.driver,
     progress,
-    gap: leader && car !== leader ? gapAt(leader, car, t) : "",
+    gap: leader && car !== leader ? gapAt(leader, car, t) : null,
   }));
 }
 
 /** Behind the leader at the last line the car crossed, as timing screens show it. */
-function gapAt(leader: ReplayCar, car: ReplayCar, t: number): string {
+function gapAt(leader: ReplayCar, car: ReplayCar, t: number): Gap {
   const crossed = bisect(car.lap_end_s, t) + 1;
-  if (crossed === 0) return "";
+  if (crossed === 0) return null;
   const at = car.lap_end_s[crossed - 1]!;
   const down = bisect(leader.lap_end_s, at) + 1 - crossed;
-  if (down >= 1) return `+${down} lap${down > 1 ? "s" : ""}`;
-  return `+${(at - leader.lap_end_s[crossed - 1]!).toFixed(1)}`;
+  if (down >= 1) return { laps: down };
+  return { seconds: at - leader.lap_end_s[crossed - 1]! };
 }
 
 export const lastLine = (replay: Replay) => Math.max(...replay.cars.map((c) => c.lap_end_s.at(-1) ?? 0));
