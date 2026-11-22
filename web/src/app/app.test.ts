@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { syntheticRace } from "../sim/synthetic.ts";
 import { dryTyre } from "./compounds";
+import { realFinish } from "./Histogram";
 import { STRINGS } from "./i18n";
 import { decisionLaps, describePlan, planSegments } from "./plan";
 import { readView, writeView } from "./url";
@@ -48,5 +49,14 @@ describe("planSegments", () => {
     const laps = decisionLaps(race, 0);
     expect(laps[0]).toBe(1);
     expect(laps.at(-1)).toBe(race.total_laps - 2);
+  });
+});
+
+describe("realFinish", () => {
+  it("marks the classified place, a retirement, or nothing for a disqualification", () => {
+    const car = syntheticRace({ cars: 3 }).cars[0]!;
+    expect(realFinish({ ...car, finish_position: 4, retired_after_lap: null })).toBe(4);
+    expect(realFinish({ ...car, finish_position: null, retired_after_lap: 31 })).toBe("retired");
+    expect(realFinish({ ...car, finish_position: null, retired_after_lap: null })).toBeNull();
   });
 });

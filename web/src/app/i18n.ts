@@ -152,7 +152,8 @@ const en = {
     ahead: "of races the alternative finishes ahead",
     behind: "finishes behind",
     mean: (se: string) => `places on average, ±${se} (one standard error)`,
-    expected: (name: string, p: string) => `${name}, expected P${p}`,
+    expected: (name: string, p: string) => `${name}, average P${p}`,
+    realFinish: (label: string) => `Real finish: ${label}`,
     simulating: (n: number) => `Simulating, ${enN(n)} races so far`,
   },
 
@@ -530,7 +531,8 @@ const uk: Strings = {
     ahead: "гонок альтернатива фінішує попереду",
     behind: "фінішує позаду",
     mean: (se) => `позиції в середньому, ±${se} (одна стандартна похибка)`,
-    expected: (name, p) => `${name}, очікувано P${p}`,
+    expected: (name, p) => `${name}, у середньому P${p}`,
+    realFinish: (label) => `Фініш насправді: ${label}`,
     simulating: (n) => `Симуляція триває, гонок уже: ${ukN(n)}`,
   },
 

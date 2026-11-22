@@ -151,6 +151,9 @@ button { cursor: pointer; border-radius: 0; }
 .histogram .baseline { stroke: var(--color-muted-2); stroke-width: 1; }
 .histogram .tick { fill: var(--color-muted); font-family: var(--font-outlier); font-size: 9px; text-anchor: middle; }
 .bar-a { fill: var(--series-a); } .bar-b { fill: var(--series-b); }
+.histogram .real { stroke: var(--color-ink); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.histogram .tick-real { fill: var(--color-ink); font-weight: 600; }
+.dash { width: 14px; height: 0; display: inline-block; border-top: 2px dashed var(--color-ink); }
 .spark { width: 72px; height: 24px; border-bottom: var(--rule-hair) solid var(--color-muted-2); }
 .pit { width: 100%; max-width: 320px; height: auto; margin: var(--space-xs) 0; }
 .assumptions { margin: 0; padding: var(--space-sm) var(--space-md) var(--space-md) var(--space-xl); color: var(--color-muted); font-size: var(--text-xs); border-top: var(--rule-hair) solid var(--color-rule); display: grid; gap: var(--space-2xs); }
