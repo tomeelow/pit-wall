@@ -100,6 +100,28 @@ def test_stints_after_consecutive_pit_laps_stay_put() -> None:
     ]
 
 
+def test_a_one_lap_stint_from_a_grid_change_keeps_its_lap() -> None:
+    # Bahrain 2026: start suspended after the formation lap, inters fitted on the grid for lap 2,
+    # pit at the end of lap 2 for slicks.
+    race = openf1_race({1: [("SOFT", 1, 0), ("INTERMEDIATE", 1, 0), ("SOFT", 10, 0)]})
+    race.pits = race.pits[race.pits["lap_number"] != 1]
+    race.laps.loc[race.laps["lap_number"] == 2, "is_pit_out_lap"] = False
+    laps = canonical(race).set_index("lap")
+    assert laps.loc[[1, 2, 3], "compound"].tolist() == ["SOFT", "INTERMEDIATE", "SOFT"]
+    assert laps.loc[2, "pit_in"]
+
+
+def test_a_one_lap_stint_on_the_in_lap_before_a_pit_lane_pass_moves() -> None:
+    # Canada 2025: a stop on lap 10, then the safety car leads the field through the pit lane on
+    # lap 11. The source starts both stints on their in-laps.
+    race = openf1_race({1: [("MEDIUM", 10, 0), ("SOFT", 1, 0), ("SOFT", 5, 1)]})
+    race.stints.loc[0, "lap_end"] = 9
+    race.stints.loc[1, ["lap_start", "lap_end"]] = 10
+    race.stints.loc[2, "lap_start"] = 11
+    laps = canonical(race).set_index("lap")
+    assert laps.loc[[10, 11, 12], "compound"].tolist() == ["MEDIUM", "SOFT", "SOFT"]
+
+
 def test_unrecognised_compound_maps_to_unknown() -> None:
     race = openf1_race({1: [("TEST_UNKNOWN", 2, 0)]})
     race.stints["compound"] = [None]
