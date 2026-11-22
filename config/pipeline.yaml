@@ -191,6 +191,11 @@ sim:
   # Gap between consecutive cars when a safety car or red flag ends, s: median interval of P2-P10
   # on the last lap of every safety car (2023 R1 - 2026 R20).
   restart_gap_s: 0.5
+  # A stint change at the end of laps 1..grid_change_laps with neither a pit record nor an out-lap
+  # is a tyre change on the grid, not a stop: Bahrain 2026 ran two laps before its suspended start.
+  # Every such change there (2023 R1 - 2026 R20) loses no time to the pit lane; later ones are real
+  # stops whose pit data OpenF1 lacks (2026 R1).
+  grid_change_laps: 2
   # Decimal places of exported draws: enough for lap times in ms, small enough for the browser.
   decimals: 4
   # Strategy search (Phase 8), published in the manifest for the browser.

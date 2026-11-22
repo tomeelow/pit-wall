@@ -134,6 +134,7 @@ class SimConfig(_Config):
     draws: int = Field(ge=1)
     follow_gap_s: float = Field(gt=0)
     restart_gap_s: float = Field(gt=0)
+    grid_change_laps: int = Field(ge=0)
     decimals: int = Field(ge=1)
     strategy: StrategyConfig
 

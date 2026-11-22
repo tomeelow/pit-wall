@@ -53,23 +53,30 @@ class StintStart:
     lap: int
     compound_c: int | None  # None: wet or unknown tyres
     tyre_age: int  # laps on the set before this stint
+    stop: bool  # the set went on at a pit stop, not on the grid (the first stint: False)
 
 
-def stint_starts(laps: pd.DataFrame) -> list[StintStart]:
+def stint_starts(laps: pd.DataFrame, grid_change_laps: int) -> list[StintStart]:
     """One driver's stints, in order, wet and unknown ones included."""
+    pit_in = set(laps.loc[laps["pit_in"], "lap"])
     starts = []
     for _, group in laps.dropna(subset=["stint"]).sort_values("lap").groupby("stint", sort=True):
         first = group.iloc[0]
+        lap = int(first["lap"])
+        stop = bool(starts) and (
+            lap - 1 > grid_change_laps or lap - 1 in pit_in or bool(first["pit_out"])
+        )
         known = group["compound_c"].dropna()
         # tyre_age counts the lap just completed, so the set had age - 1 laps beforehand.
         age_before = int(first["tyre_age"]) - 1 if pd.notna(first["tyre_age"]) else 0
         compound = int(known.iloc[0]) if len(known) == len(group) else None
-        starts.append(StintStart(int(first["lap"]), compound, age_before))
+        starts.append(StintStart(lap, compound, age_before, stop))
     return starts
 
 
-def snapshots(tables: RaceTables, drivers: list[str]) -> list[Snapshot]:
-    stints = {d: stint_starts(tables.laps[tables.laps["driver"] == d]) for d in drivers}
+def snapshots(tables: RaceTables, drivers: list[str], grid_change_laps: int) -> list[Snapshot]:
+    laps = tables.laps
+    stints = {d: stint_starts(laps[laps["driver"] == d], grid_change_laps) for d in drivers}
     # Race time at the line of every lap a car completed. race_state flags a retirement on the
     # last lap completed, so that lap still counts: the car retires during the next one.
     time_at = {
@@ -90,7 +97,7 @@ def snapshots(tables: RaceTables, drivers: list[str]) -> list[Snapshot]:
             compounds.append(current.compound_c if current else None)
             ages.append(current.tyre_age + done if current else None)
             stint_laps.append(done if current else None)
-            stops.append(max(0, len(started) - 1))
+            stops.append(sum(s.stop for s in started))
             used.append(sorted({s.compound_c for s in started if s.compound_c is not None}))
         out.append(
             Snapshot(
@@ -194,7 +201,7 @@ def build_sim(
             if not own.empty
             else np.round(field_pace.to_numpy(float), decimals).tolist()
         )
-        stints = stint_starts(laps[laps["driver"] == driver])
+        stints = stint_starts(laps[laps["driver"] == driver], config.grid_change_laps)
         position = row["position"]
         cars.append(
             Car(
@@ -208,15 +215,15 @@ def build_sim(
                 # first_start_lap, so no simulation replays it; snapshots still count it.
                 stops=[
                     PlannedStop(lap=s.lap - 1, compound_c=s.compound_c, tyre_age=s.tyre_age)
-                    for s in stints[1:]
-                    if s.compound_c is not None
+                    for s in stints
+                    if s.stop and s.compound_c is not None
                 ],
                 finish_position=None if pd.isna(position) else int(position),
                 retired_after_lap=int(row["laps_completed"]) if row["status"] == "DNF" else None,
                 wet_tyres_used=driver in wet,
             )
         )
-    states = snapshots(tables, [car.driver for car in cars])
+    states = snapshots(tables, [car.driver for car in cars], config.grid_change_laps)
     first_start_lap = _first_start_lap(states, tables.event.total_laps)
 
     lap_factor = events["neutralised_lap_factor"]
