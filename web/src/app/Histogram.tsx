@@ -1,3 +1,4 @@
+import type { Car } from "../contract/sim";
 import type { Distribution } from "../sim/index.ts";
 import { useT } from "./i18n";
 
@@ -12,8 +13,14 @@ const HEIGHT = 200;
 const AXIS = 22;
 const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
 
+/** Where the car really finished: a place, a retirement, or nothing to show (a disqualification). */
+export type RealFinish = number | "retired" | null;
+
+export const realFinish = (car: Car): RealFinish =>
+  car.finish_position ?? (car.retired_after_lap !== null ? "retired" : null);
+
 /** Where the car finished across the runs, one bar per place, actual and alternative side by side. */
-export function Histogram({ series }: { series: Series[] }) {
+export function Histogram({ series, real = null }: { series: Series[]; real?: RealFinish }) {
   const t = useT();
   const first = series[0]!.value;
   const showDsq = series.some((s) => s.value.disqualified > 0);
@@ -27,6 +34,7 @@ export function Histogram({ series }: { series: Series[] }) {
   const slot = WIDTH / labels.length;
   const bar = (slot * 0.8) / series.length;
   const plot = HEIGHT - AXIS;
+  const marked = real === null ? -1 : real === "retired" ? first.places.length : real - 1;
   const summary = series
     .map((s, j) => {
       const row = shares[j]!;
@@ -55,11 +63,14 @@ export function Histogram({ series }: { series: Series[] }) {
               </rect>
             );
           })}
-          <text className="tick" x={k * slot + slot / 2} y={HEIGHT - 6}>
+          <text className={k === marked ? "tick tick-real" : "tick"} x={k * slot + slot / 2} y={HEIGHT - 6}>
             {label}
           </text>
         </g>
       ))}
+      {marked >= 0 && (
+        <line className="real" x1={(marked + 0.5) * slot} x2={(marked + 0.5) * slot} y1={0} y2={plot} />
+      )}
     </svg>
   );
 }

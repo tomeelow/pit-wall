@@ -15,7 +15,7 @@ import {
 } from "../sim/index.ts";
 import { tyreLabel } from "./compounds";
 import { LapField, percent, Pick, Segmented, signed } from "./Controls";
-import { Histogram } from "./Histogram";
+import { Histogram, realFinish } from "./Histogram";
 import { useT } from "./i18n";
 import { useRun } from "./hooks";
 import { evaluator, SEED } from "./lab";
@@ -54,6 +54,7 @@ export function WhatIf({
   const [run, start] = useRun<Result>();
   const rules = checkRules(race, car, fromLap, plan);
   const total = race.total_laps;
+  const real = realFinish(race.cars[car]!);
   const runs = settings.max_runs;
 
   const move = (k: number, lap: number) =>
@@ -223,18 +224,25 @@ export function WhatIf({
               <ul className="legend">
                 <li>
                   <i className="dot series-a" />
-                  {tx.expected(tx.actual, result.actual.meanPosition.toFixed(2))}
+                  {tx.expected(tx.actualLane, result.actual.meanPosition.toFixed(2))}
                 </li>
                 <li>
                   <i className="dot series-b" />
                   {tx.expected(tx.alternative, result.alternative.meanPosition.toFixed(2))}
                 </li>
+                {real !== null && (
+                  <li>
+                    <i className="dash" />
+                    {tx.realFinish(real === "retired" ? t.histogram.retired : `P${real}`)}
+                  </li>
+                )}
               </ul>
               <Histogram
                 series={[
-                  { name: tx.actual, tone: "a", value: result.actual },
+                  { name: tx.actualLane, tone: "a", value: result.actual },
                   { name: tx.alternative, tone: "b", value: result.alternative },
                 ]}
+                real={real}
               />
               {run.status === "running" && <p className="sub">{tx.simulating(run.races)}</p>}
             </div>
