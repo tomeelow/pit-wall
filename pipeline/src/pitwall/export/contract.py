@@ -12,8 +12,8 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 from pydantic.json_schema import GenerateJsonSchema
 
-SchemaVersion = Literal["0.6.0"]
-SCHEMA_VERSION: SchemaVersion = "0.6.0"
+SchemaVersion = Literal["0.7.0"]
+SCHEMA_VERSION: SchemaVersion = "0.7.0"
 
 Compound = Literal["SOFT", "MEDIUM", "HARD", "INTERMEDIATE", "WET", "UNKNOWN"]
 
@@ -181,11 +181,14 @@ class Car(_Contract):
     stops: list[PlannedStop]  # the strategy actually run
     finish_position: int | None  # official classification; None for DNF and DSQ
     retired_after_lap: int | None  # last lap completed by a car that did not finish
+    # Ran intermediates or wets: Art. 30.5's two-dry-compound rule does not apply to this car.
+    wet_tyres_used: bool
 
 
 class Snapshot(_Contract):
     """Race state after `lap` was completed. Lists are per car, in SimRace.cars order; None for a
-    car that has retired. A stop made at the end of `lap` has already happened."""
+    car that has retired. A stop made at the end of `lap` has already happened. Before
+    SimRace.first_start_lap a running car can have a time but no compound: wet or unknown tyres."""
 
     lap: int
     race_time_s: list[float | None]
@@ -220,6 +223,9 @@ class SimRace(_Contract):
     traffic: Traffic
     cars: list[Car]
     snapshots: list[Snapshot]  # after laps 1 .. total_laps - 1
+    # Simulations start after this lap or a later one: until it, a running car was on wet or
+    # unknown tyres, which no model covers.
+    first_start_lap: int
     realised: list[Neutralisation]  # what happened: for replays and ex-post views only
 
 

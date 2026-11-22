@@ -21,6 +21,10 @@ export interface RuleCheck {
   breaks: BrokenRule[];
 }
 
+/** Art. 30.5: a car that ran intermediates or wets need not use two dry compounds. */
+export const minDryCompounds = (race: SimRace, car: number): number =>
+  race.cars[car]!.wet_tyres_used ? 0 : race.rules.min_dry_compounds;
+
 /**
  * The engine's own legality test (engine.ts classify) read from the race state after `fromLap`:
  * dry compounds used, stops made, and the longest stint from the one running at fromLap on.
@@ -50,7 +54,8 @@ export function checkRules(
     previous = stop.lap;
   }
 
-  const { min_dry_compounds, min_stops, max_stint_laps } = race.rules;
+  const { min_stops, max_stint_laps } = race.rules;
+  const min_dry_compounds = minDryCompounds(race, car);
   const breaks: BrokenRule[] = [];
   const used = new Set([...(snapshot.dry_compounds[car] ?? []), ...strategy.map((s) => s.compound_c)]);
   if (used.size < min_dry_compounds) {

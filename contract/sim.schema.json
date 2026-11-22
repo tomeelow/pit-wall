@@ -62,6 +62,9 @@
               "type": "null"
             }
           ]
+        },
+        "wet_tyres_used": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -73,7 +76,8 @@
         "dnf_rate_per_lap",
         "stops",
         "finish_position",
-        "retired_after_lap"
+        "retired_after_lap",
+        "wet_tyres_used"
       ],
       "title": "Car",
       "type": "object"
@@ -350,7 +354,7 @@
     },
     "Snapshot": {
       "additionalProperties": false,
-      "description": "Race state after `lap` was completed. Lists are per car, in SimRace.cars order; None for a\ncar that has retired. A stop made at the end of `lap` has already happened.",
+      "description": "Race state after `lap` was completed. Lists are per car, in SimRace.cars order; None for a\ncar that has retired. A stop made at the end of `lap` has already happened. Before\nSimRace.first_start_lap a running car can have a time but no compound: wet or unknown tyres.",
       "properties": {
         "lap": {
           "type": "integer"
@@ -492,7 +496,7 @@
   "additionalProperties": false,
   "properties": {
     "schema_version": {
-      "const": "0.6.0",
+      "const": "0.7.0",
       "type": "string"
     },
     "season": {
@@ -555,6 +559,9 @@
       },
       "type": "array"
     },
+    "first_start_lap": {
+      "type": "integer"
+    },
     "realised": {
       "items": {
         "$ref": "#/$defs/Neutralisation"
@@ -580,6 +587,7 @@
     "traffic",
     "cars",
     "snapshots",
+    "first_start_lap",
     "realised"
   ],
   "title": "SimRace",

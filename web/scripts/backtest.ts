@@ -24,7 +24,7 @@ for (const entry of manifest.races) {
   races.push({
     season: race.season,
     round: race.round,
-    starts: startLaps(race.total_laps, fractions).map(({ fraction, lap }) => ({
+    starts: startLaps(race.total_laps, fractions, race.first_start_lap).map(({ fraction, lap }) => ({
       fraction,
       lap,
       counts: finishCounts(race, lap, runs, seed),

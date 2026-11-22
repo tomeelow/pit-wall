@@ -1,4 +1,5 @@
 import type { PlannedStop, SimRace } from "../contract/sim";
+import { minDryCompounds } from "./rules.ts";
 
 /** Neutralisation kinds, by index in every per-kind array of the engine. */
 export const KINDS = ["SC", "VSC", "RED"] as const;
@@ -26,6 +27,7 @@ export interface Prepared {
   stintLaps: Int32Array;
   stops: Int32Array;
   used: Int32Array; // bit C set when C-number C has been used
+  minCompounds: Int32Array; // dry C-numbers the car must use: 0 once it ran wet tyres
   alive: Uint8Array;
   retiredAfter: Int32Array; // realised: last lap completed by a car that did not finish, else -1
   // Realised neutralisation per lap (GREEN where none) and the lap it ends.
@@ -41,8 +43,8 @@ export interface Prepared {
 
 export function prepare(race: SimRace, fromLap: number): Prepared {
   const snapshot = race.snapshots.find((s) => s.lap === fromLap);
-  if (!snapshot) {
-    throw new Error(`no race state after lap ${fromLap} (1 .. ${race.total_laps - 1})`);
+  if (!snapshot || fromLap < race.first_start_lap) {
+    throw new Error(`no race state to simulate from after lap ${fromLap} (${race.first_start_lap} .. ${race.total_laps - 1})`);
   }
   const n = race.cars.length;
   const compoundIndex = new Map(race.compounds.map((c, i) => [c, i]));
@@ -107,6 +109,7 @@ export function prepare(race: SimRace, fromLap: number): Prepared {
     stintLaps,
     stops,
     used,
+    minCompounds: Int32Array.from(race.cars, (_, i) => minDryCompounds(race, i)),
     alive,
     retiredAfter,
     realisedKind,

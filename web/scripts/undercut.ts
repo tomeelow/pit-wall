@@ -30,7 +30,8 @@ interface Row {
 function pairs(race: SimRace): Row[] {
   const rows: Row[] = [];
   const name = `${race.season}-${String(race.round).padStart(2, "0")}`;
-  for (let lap = 2; lap <= race.total_laps - 3; lap++) {
+  // The engine starts from the end of lap - 1.
+  for (let lap = Math.max(2, race.first_start_lap + 1); lap <= race.total_laps - 3; lap++) {
     if (race.realised.some((n) => n.start_lap <= lap + 2 && n.end_lap >= lap)) continue;
     const before = race.snapshots[lap - 2]!.race_time_s;
     const after = race.snapshots[lap + 1]!.race_time_s;

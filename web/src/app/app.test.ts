@@ -49,6 +49,7 @@ describe("planSegments", () => {
     const laps = decisionLaps(race, 0);
     expect(laps[0]).toBe(1);
     expect(laps.at(-1)).toBe(race.total_laps - 2);
+    expect(decisionLaps({ ...race, first_start_lap: 6 }, 0)[0]).toBe(6);
   });
 });
 

@@ -252,7 +252,7 @@ export function simulateRace(
     if (trace) record(trace, ws, lap, kind, n);
   }
 
-  classify(ws, n, rules.min_dry_compounds, rules.min_stops, rules.max_stint_laps);
+  classify(ws, n, prepared.minCompounds, rules.min_stops, rules.max_stint_laps);
 }
 
 /**
@@ -312,7 +312,7 @@ function popcount(x: number): number {
 function classify(
   ws: Workspace,
   n: number,
-  minCompounds: number,
+  minCompounds: Int32Array,
   minStops: number,
   maxStint: number | null,
 ): void {
@@ -320,7 +320,7 @@ function classify(
     if (!ws.alive[i]) ws.status[i] = DNF;
     else {
       const legal =
-        popcount(ws.used[i]!) >= minCompounds &&
+        popcount(ws.used[i]!) >= minCompounds[i]! &&
         ws.stops[i]! >= minStops &&
         (maxStint === null || ws.longestStint[i]! <= maxStint);
       ws.status[i] = legal ? FINISHED : DSQ;

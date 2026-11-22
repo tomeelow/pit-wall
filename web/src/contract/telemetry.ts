@@ -5,7 +5,7 @@
  * every lap of the race has the same length: laps compare by distance, not time.
  */
 export interface TelemetryLap {
-  schema_version: "0.6.0";
+  schema_version: "0.7.0";
   driver: string;
   lap: number;
   lap_time_s: number;

@@ -3,7 +3,7 @@
   "description": "One lap's car data by distance from the line. Distance integrates speed and is scaled so\nevery lap of the race has the same length: laps compare by distance, not time.",
   "properties": {
     "schema_version": {
-      "const": "0.6.0",
+      "const": "0.7.0",
       "type": "string"
     },
     "driver": {
