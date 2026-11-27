@@ -21,7 +21,9 @@ simulated races, the earlier stop finishes ahead of the real strategy 16 % of th
 
 ## What you can do
 
-Pick a race and a driver at the top of the page, then choose a tool:
+Pick a race and a driver at the top of the page, then choose a tool. On a first visit a short
+guided tour, in English or Ukrainian, lights up each control in turn and lets you try it; the
+**?** button at the top opens it again.
 
 | Tool | What it answers |
 |---|---|

@@ -83,7 +83,7 @@ export function Undercut({
 
   return (
     <div className="split">
-      <section className="panel">
+      <section className="panel" data-tour="undercut">
         <header>
           <h2>{tx.title}</h2>
           <span className="sub">{tx.attacks(attacker)}</span>

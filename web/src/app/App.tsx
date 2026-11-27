@@ -11,6 +11,8 @@ import { RaceView } from "./RaceView";
 import { ReplayView } from "./Replay";
 import { Empty, Failure, Skeleton } from "./States";
 import { TelemetryView } from "./Telemetry";
+import { Tour } from "./Tour";
+import { markTourSeen, tourSeen } from "./onboarding";
 import { Undercut } from "./Undercut";
 import { raceKey, readView, TABS, writeView, type View } from "./url";
 import { WhatIf } from "./WhatIf";
@@ -91,7 +93,7 @@ function Shell() {
   );
 }
 
-function Bar({ children }: { children?: React.ReactNode }) {
+function Bar({ children, onTour }: { children?: React.ReactNode; onTour?: () => void }) {
   const [theme, toggle] = useTheme();
   const { t, setLang } = useContext(I18n);
   const other: Lang = t.lang === "en" ? "uk" : "en";
@@ -99,6 +101,18 @@ function Bar({ children }: { children?: React.ReactNode }) {
     <header className="bar">
       <span className="wordmark">Pit Wall</span>
       {children}
+      {onTour && (
+        <button
+          type="button"
+          className="quiet help"
+          data-tour="help"
+          aria-label={t.tour.open}
+          title={t.tour.open}
+          onClick={onTour}
+        >
+          ?
+        </button>
+      )}
       <button type="button" className="quiet theme" onClick={toggle}>
         {theme === "dark" ? t.light : t.dark}
       </button>
@@ -112,6 +126,7 @@ function Bar({ children }: { children?: React.ReactNode }) {
 function Lab({ manifest }: { manifest: Manifest }) {
   const t = useT();
   const [view, change] = useView();
+  const [touring, setTouring] = useState(() => !tourSeen());
   const simulated = manifest.races.filter((r) => r.sim_path);
   const entry =
     manifest.races.find((r) => raceKey(r) === view.race) ?? simulated.at(-1) ?? manifest.races.at(-1);
@@ -185,13 +200,14 @@ function Lab({ manifest }: { manifest: Manifest }) {
 
   return (
     <>
-      <Bar>
+      <Bar onTour={() => setTouring(true)}>
         <label className="visually-hidden" htmlFor="race">
           {t.app.race}
         </label>
         <select
           id="race"
           className="input"
+          data-tour="race"
           value={raceKey(entry)}
           onChange={(e) => change({ race: e.target.value, lap: null })}
         >
@@ -214,6 +230,7 @@ function Lab({ manifest }: { manifest: Manifest }) {
         <select
           id="driver"
           className="input"
+          data-tour="driver"
           value={driver ?? ""}
           disabled={drivers.length === 0}
           onChange={(e) => change({ driver: e.target.value, lap: null })}
@@ -224,11 +241,12 @@ function Lab({ manifest }: { manifest: Manifest }) {
             </option>
           ))}
         </select>
-        <nav aria-label={t.app.tools}>
+        <nav aria-label={t.app.tools} data-tour="tabs">
           {TABS.map((tab) => (
             <a
               key={tab}
               href={writeView({ ...view, tab })}
+              data-tour={`tab-${tab}`}
               aria-current={view.tab === tab ? "page" : undefined}
               onClick={(e) => {
                 e.preventDefault();
@@ -255,6 +273,15 @@ function Lab({ manifest }: { manifest: Manifest }) {
           <ModelCard manifest={manifest} entry={entry} sim={simReady} calibration={calibration} />
         )}
       </main>
+      {touring && (
+        <Tour
+          onTab={(tab) => change({ tab })}
+          onClose={() => {
+            markTourSeen();
+            setTouring(false);
+          }}
+        />
+      )}
     </>
   );
 }

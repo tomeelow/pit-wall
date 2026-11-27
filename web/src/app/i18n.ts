@@ -2,9 +2,17 @@ import { createContext, useContext } from "react";
 import type { RuleIssue } from "../sim/index.ts";
 import type { Tyre } from "./compounds";
 import type { Gap } from "./timing";
+import type { StepId } from "./onboarding";
 
 export const LANGS = ["en", "uk"] as const;
 export type Lang = (typeof LANGS)[number];
+
+/** One card of the guided tour; `tryIt` invites the viewer to use the lit control. */
+interface TourCopy {
+  title: string;
+  body: string;
+  tryIt?: string;
+}
 
 /** A sentence that opens in bold: [bold, rest]. */
 type Lead = [bold: string, rest: string];
@@ -30,12 +38,83 @@ const EN_TYRES: Record<Tyre, string> = {
   unknown: "unknown",
 };
 
+const EN_TOUR: Record<StepId, TourCopy> = {
+  welcome: {
+    title: "Welcome to Pit Wall",
+    body: "A strategy lab for Formula 1 races since 2023. Change a driver’s pit stops and the app races your plan thousands of times, then shows how it would have finished: a spread of positions, not one guess. The tour takes a minute. Choose your language first; you can switch it later at the top right.",
+  },
+  race: {
+    title: "Pick a race",
+    body: "Every race since 2023 is here, newest last. A race marked “race view only” cannot be simulated, usually because it rained.",
+  },
+  driver: {
+    title: "Pick a driver",
+    body: "The strategy tools work on this driver’s race. Clicking a row in the race table picks a driver too.",
+  },
+  tabs: {
+    title: "Eight tools",
+    body: "Race, Replay and Telemetry show what happened. What if, Optimise, Undercut and Debrief try other strategies. The model card says how far to trust them.",
+  },
+  raceView: {
+    title: "The race at a glance",
+    body: "Each row is a car. Its bar runs across the laps, one colour per tyre, so every stop shows as a change of colour.",
+    tryIt: "Click any row to pick that driver.",
+  },
+  decide: {
+    title: "Choose the decision lap",
+    body: "The simulation starts at the end of this lap and knows only what the pit wall knew then: later safety cars and retirements are drawn at random.",
+  },
+  drag: {
+    title: "Drag the stops",
+    body: "The top bar is the strategy the driver really ran; the bottom one is yours to change. Each thin handle on it is a pit stop.",
+    tryIt: "Drag a handle left or right, or focus it and use the arrow keys.",
+  },
+  stops: {
+    title: "Or set them exactly",
+    body: "Type the lap of each stop, pick the tyre it fits, add or remove stops. “Back to the actual plan” undoes it all.",
+  },
+  run: {
+    title: "Run the races",
+    body: "The rules check says whether the stewards would accept the plan. Choose whether safety cars are drawn at random (was it a good call?) or happen as they did (did it work out?). Both plans race the same simulated races, so the difference is down to the plan.",
+    tryIt: "Press the button: the results fill in as the races finish.",
+  },
+  results: {
+    title: "Read the answer",
+    body: "How often the alternative finishes ahead of the real strategy or behind it, the places it gains on average, and a histogram of finishing positions for both plans. The dashed line is where the driver really finished.",
+  },
+  optimise: {
+    title: "Let the search find a plan",
+    body: "Choose a target: the best position, a podium, points or beating a rival. The search races every legal plan from the decision lap and keeps the best.",
+  },
+  undercut: {
+    title: "Undercut or overcut",
+    body: "Pick the car to attack and a lap: who comes out in front if your driver pits first, or stays out a lap longer, and the gap, pace and stop time behind the answer.",
+  },
+  debrief: {
+    title: "Debrief: was it a good call?",
+    body: "Every stop is judged against the best plan from the lap before it, twice: with safety cars drawn at random, as the pit wall saw it, and with them where they really fell. The two are never merged.",
+  },
+  replay: {
+    title: "Replay and telemetry",
+    body: "Replay moves every car round the track map, lap by lap. Telemetry lays two fastest laps over each other: speed, throttle, brake and gear, and who was faster where.",
+  },
+  model: {
+    title: "How far to trust it",
+    body: "The model card shows what the simulation was fitted on and how well it is calibrated on races it never saw, including where it fails.",
+  },
+  done: {
+    title: "You’re set",
+    body: "This button opens the tour again any time. A good first try: pick a driver, drag a stop a few laps earlier and run the races.",
+  },
+};
+
 const en = {
   lang: "en" as Lang,
   n: enN,
   s: "s",
   km: "km",
   switchTo: "Українська",
+  langName: "English",
   light: "Light",
   dark: "Dark",
   footer: "Unofficial project, not affiliated with Formula 1. Data from OpenF1.",
@@ -72,6 +151,19 @@ const en = {
     driver: "Driver",
     raceViewOnly: " (race view only)",
     tools: "Tools",
+  },
+
+  tour: {
+    open: "Show the guided tour",
+    language: "Language",
+    step: (i: number, n: number) => `${i} of ${n}`,
+    start: "Start the tour",
+    skip: "Skip",
+    back: "Back",
+    next: "Next",
+    finish: "Start exploring",
+    tryIt: "Try it:",
+    steps: EN_TOUR,
   },
 
   failure: "That did not work",
@@ -402,12 +494,83 @@ function ukSegment(segment: string): string {
   return `${UK_SEGMENT_KEYS[key]}: ${translated}`;
 }
 
+const UK_TOUR: Record<StepId, TourCopy> = {
+  welcome: {
+    title: "Вітаємо в Pit Wall",
+    body: "Лабораторія стратегій для гонок Формули 1 з 2023 року. Змініть піт-стопи гонщика, і застосунок проїде ваш план тисячі разів, а потім покаже, як він міг би фінішувати: розподіл позицій, а не одне припущення. Огляд триває хвилину. Спершу виберіть мову; змінити її можна будь-коли вгорі праворуч.",
+  },
+  race: {
+    title: "Виберіть гонку",
+    body: "Тут усі гонки з 2023 року, найновіші внизу. Гонку з позначкою «лише перегляд гонки» неможливо змоделювати, здебільшого через дощ.",
+  },
+  driver: {
+    title: "Виберіть гонщика",
+    body: "Інструменти стратегії працюють із гонкою цього гонщика. Вибрати гонщика можна й клацнувши рядок у таблиці гонки.",
+  },
+  tabs: {
+    title: "Вісім інструментів",
+    body: "«Гонка», «Повтор» і «Телеметрія» показують, що сталося. «Що якби», «Оптимізація», «Андеркат» і «Розбір» пробують інші стратегії. «Картка моделі» каже, наскільки їм можна довіряти.",
+  },
+  raceView: {
+    title: "Гонка з першого погляду",
+    body: "Кожен рядок — болід. Його смуга тягнеться через усі кола, і кожна шина має свій колір, тож кожна зупинка видна як зміна кольору.",
+    tryIt: "Клацніть будь-який рядок, щоб вибрати цього гонщика.",
+  },
+  decide: {
+    title: "Виберіть коло рішення",
+    body: "Симуляція стартує наприкінці цього кола й знає лише те, що тоді знав піт-уол: пізніші автомобілі безпеки та сходи розігруються випадково.",
+  },
+  drag: {
+    title: "Перетягуйте зупинки",
+    body: "Верхня смуга — стратегія, якою гонщик проїхав насправді; нижню можна змінювати. Кожна тонка ручка на ній — піт-стоп.",
+    tryIt: "Потягніть ручку ліворуч чи праворуч або виділіть її й натискайте стрілки.",
+  },
+  stops: {
+    title: "Або задайте їх точно",
+    body: "Введіть коло кожної зупинки, виберіть шину, додайте чи приберіть зупинки. «Повернути реальний план» скасовує все.",
+  },
+  run: {
+    title: "Запустіть гонки",
+    body: "Перевірка правил показує, чи прийняли б план стюарди. Виберіть, чи автомобілі безпеки розігруються випадково (чи було рішення добрим?), чи з’являються так, як насправді (чи спрацював план?). Обидва плани їдуть ті самі змодельовані гонки, тож різниця залежить лише від плану.",
+    tryIt: "Натисніть кнопку: результати з’являтимуться в міру того, як гонки завершуються.",
+  },
+  results: {
+    title: "Прочитайте відповідь",
+    body: "Як часто альтернатива фінішує попереду реальної стратегії чи позаду неї, скільки позицій вона дає в середньому, і гістограма фінішних позицій обох планів. Пунктир позначає, де гонщик фінішував насправді.",
+  },
+  optimise: {
+    title: "Нехай пошук знайде план",
+    body: "Виберіть мету: найкращу позицію, подіум, очки чи перемогу над суперником. Пошук проїжджає кожен дозволений план від кола рішення й залишає найкращі.",
+  },
+  undercut: {
+    title: "Андеркат чи оверкат",
+    body: "Виберіть, кого атакувати, і коло: хто опиниться попереду, якщо ваш гонщик заїде першим або протримається на трасі на коло довше, і з чого складається відповідь: розрив, темп і час зупинки.",
+  },
+  debrief: {
+    title: "Розбір: чи було рішення добрим?",
+    body: "Кожну зупинку оцінено проти найкращого плану з попереднього кола, двічі: з випадковими автомобілями безпеки, як це бачив піт-уол, і з тими, що сталися насправді. Ці дві оцінки ніколи не змішуються.",
+  },
+  replay: {
+    title: "Повтор і телеметрія",
+    body: "Повтор рухає всі боліди картою траси коло за колом. Телеметрія накладає одне на одне два найшвидші кола: швидкість, газ, гальмо й передачу, а також хто де був швидшим.",
+  },
+  model: {
+    title: "Наскільки цьому довіряти",
+    body: "Картка моделі показує, на чому навчено симуляцію і наскільки добре вона відкалібрована на гонках, яких не бачила, зокрема де вона помиляється.",
+  },
+  done: {
+    title: "Усе готово",
+    body: "Ця кнопка будь-коли знову відкриває огляд. Для початку: виберіть гонщика, перетягніть зупинку на кілька кіл раніше й запустіть гонки.",
+  },
+};
+
 const uk: Strings = {
   lang: "uk",
   n: ukN,
   s: "с",
   km: "км",
   switchTo: "English",
+  langName: "Українська",
   light: "Світла",
   dark: "Темна",
   footer: "Неофіційний проєкт, не пов’язаний із Formula 1. Дані з OpenF1.",
@@ -451,6 +614,19 @@ const uk: Strings = {
     driver: "Гонщик",
     raceViewOnly: " (лише перегляд гонки)",
     tools: "Інструменти",
+  },
+
+  tour: {
+    open: "Показати огляд застосунку",
+    language: "Мова",
+    step: (i, n) => `${i} з ${n}`,
+    start: "Почати огляд",
+    skip: "Пропустити",
+    back: "Назад",
+    next: "Далі",
+    finish: "До роботи",
+    tryIt: "Спробуйте:",
+    steps: UK_TOUR,
   },
 
   failure: "Не вдалося",

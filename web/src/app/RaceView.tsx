@@ -33,7 +33,7 @@ export function RaceView({
   const used = TYRES.filter((t) => race.drivers.some((d) => d.stints.some((s) => stintTyre(s) === t)));
   const periods = neutralisations(sim, t);
   return (
-    <section className="panel">
+    <section className="panel" data-tour="race-view">
       <header>
         <div>
           <h2>{t.race.title(race.name, race.season, race.total_laps)}</h2>

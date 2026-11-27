@@ -75,7 +75,7 @@ export function Optimise({
 
   return (
     <div className="split split-narrow">
-      <section className="panel">
+      <section className="panel" data-tour="optimise">
         <header>
           <h2>{tx.search}</h2>
         </header>
