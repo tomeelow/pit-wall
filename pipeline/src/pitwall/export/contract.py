@@ -177,7 +177,7 @@ class Car(_Contract):
     pace_from: Literal["driver", "field"]
     pace_s: list[float]  # per draw
     slope_s_per_lap: list[list[float]]  # per compound, per draw
-    dnf_rate_per_lap: list[float]  # per draw
+    dnf_rate_per_lap: list[float]  # per draw, in mid-field: see SimRace.dnf_position_log_rate
     stops: list[PlannedStop]  # the strategy actually run; tyre changes on the grid are not stops
     finish_position: int | None  # official classification; None for DNF and DSQ
     retired_after_lap: int | None  # last lap completed by a car that did not finish
@@ -234,6 +234,9 @@ class SimRace(_Contract):
     neutralisations: list[NeutralisationParams]
     traffic: Traffic
     reaction: Reaction
+    # Per draw: change in a car's log retirement rate per lap from the front of the running order
+    # (-0.5) to the back (+0.5), placed among the cars running as the lap begins. Empty: no effect.
+    dnf_position_log_rate: list[float]
     cars: list[Car]
     snapshots: list[Snapshot]  # after laps 1 .. total_laps - 1
     # Simulations start after this lap or a later one: until it, a running car was on wet or

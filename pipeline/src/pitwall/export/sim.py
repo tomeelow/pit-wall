@@ -161,7 +161,10 @@ def build_sim(
 
     era = regulations.era_of(tables.event.season)
     hazard = pd.read_parquet(path / "hazard_draws.parquet")
-    hazard = hazard[(hazard["draw"] < n) & (hazard["phase"] == "running")]
+    hazard = hazard[hazard["draw"] < n]
+    # Races fitted before the running-position term have none: retirement risk is then flat.
+    dnf_position = hazard[hazard["phase"] == "position"]
+    hazard = hazard[hazard["phase"] == "running"]
     events = json.loads((path / "events.json").read_text())
     traffic_draws = pd.read_parquet(path / "traffic_draws.parquet")
     traffic_draws = traffic_draws[traffic_draws["draw"] < n]
@@ -296,6 +299,7 @@ def build_sim(
         reaction=Reaction(**{name: values[:n] for name, values in fitted.items()})
         if (fitted := events.get("reaction"))
         else Reaction(intercept_sc=[], intercept_vsc=[], tyre_age_per_10=[], race_left=[]),
+        dnf_position_log_rate=per_draw(dnf_position, "rate") if not dnf_position.empty else [],
         cars=cars,
         snapshots=states,
         first_start_lap=first_start_lap,

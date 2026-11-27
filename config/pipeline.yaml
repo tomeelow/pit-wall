@@ -136,11 +136,19 @@ events:
       # races per track cannot identify the spread; 0.5 still lets a track run at ~2.7x its era's
       # rate at two sd (street circuits), and keeps the rare red-flag family out of a funnel.
       unit_sd: 0.5
+      # Change in a later retirement's log rate from the front of the running order to the back,
+      # per era. Normal(0, 1) allows ~7x either way at two sd.
+      position_sd: 1.0
     gate:
       max_rhat: 1.01
       min_ess: 400
       max_divergences: 0
     export_draws: 200
+    # Laps at risk of a later retirement are grouped into this many bands of running position.
+    position_bins: 10
+    # ... each placed by where the car ran this many laps before: a car about to retire often
+    # drops back first (raw back-to-front ratio 8.9x placed on the lap before, 6.5x five before).
+    position_lag_laps: 5
     # Leave-one-season-out validation of the neutralisation rates. 2026 is not held out: with no
     # 2026 race in training its era level would be prior only.
     validation_seasons: [2023, 2024, 2025]

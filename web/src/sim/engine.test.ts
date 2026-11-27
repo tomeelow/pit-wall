@@ -298,6 +298,34 @@ describe("mechanics", () => {
     expect(stopLaps(realised, 0, REPLAY).stops).toEqual([35, 35, 35, 35]);
   });
 
+  it("retires cars at the back more often by the fitted running-position effect", () => {
+    // 20 cars that keep their order; mid-field rate 0.003 per lap over 40 laps.
+    const options = { cars: 20, laps: 40, eventRate: 0, dnfRate: 0.003, spacingS: 30 };
+    const retired = (dnfPosition: number) => {
+      const race = syntheticRace({ ...options, dnfPosition });
+      const runs = 3000;
+      const out = runSimulations(race, {
+        fromLap: 1,
+        sets: [actualStrategies(race, 1)],
+        runs,
+        seed: 5,
+        mode: SAMPLED,
+      });
+      const share = (cars: number[]) =>
+        cars.reduce((sum, i) => {
+          for (let r = 0; r < runs; r++) sum += out.status[r * race.cars.length + i] === DNF ? 1 : 0;
+          return sum;
+        }, 0) / (cars.length * runs);
+      return { front: share([0, 1, 2, 3]), back: share([16, 17, 18, 19]) };
+    };
+    const flat = retired(0);
+    expect(flat.back / flat.front).toBeCloseTo(1, 0);
+    // Front and back sit near -0.42 and +0.42: about exp(2 x 0.84) = 5.4x the risk.
+    const steep = retired(2);
+    expect(steep.back / steep.front).toBeGreaterThan(3.5);
+    expect(steep.back / steep.front).toBeLessThan(8);
+  });
+
   it("adds warm-up on the first green laps of a stint", () => {
     const race = syntheticRace({ cars: 1, laps: 12, eventRate: 0, dnfRate: 0, warmupS: [0.8, 0.3] });
     const sameSet = [{ lap: 6, compound_c: 2, tyre_age: 6 }];

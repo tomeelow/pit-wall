@@ -1,10 +1,16 @@
 """Rates of random race events: safety car, VSC, red flag and retirement (plan Phase 4).
 
-    events ~ Poisson(exposure * exp(base[era, family] + unit_sd[family] * z[unit, family]))
+    events ~ Poisson(exposure * exp(base[era, family] + unit_sd[family] * z[unit, family]
+                                    + position[era] * position))
 
 A family is an event kind in one phase. `lap1` counts events that start on the opening lap
 (exposure: one per race, or one per car for retirements); `running` counts events that start
 later (exposure: laps at risk). Units are tracks for neutralisations and teams for retirements.
+`position` is where a car runs, from the front of the running order (-0.5) to the back (+0.5),
+for later retirements only (0 elsewhere): cars in the pack collide more than cars in front, which
+a team's rate alone cannot tell apart. A team's rate is then its rate in mid-field. A lap is placed
+by where the car ran a few laps before it (`lag`): a car about to retire often drops back first,
+and that would credit its fall to the position it fell to.
 OpenF1 starts in 2023, so a track has only three or four races: its rate is pulled towards its
 era's, and an unseen track or team gets a fresh deviation, which makes its rate wider.
 
@@ -29,7 +35,7 @@ from pitwall.models.sampling import Diagnostics, sample
 DNF = "DNF"
 KINDS = (SC, VSC, RED)
 PHASES = ("lap1", "running")
-COLUMNS = ["race", "era", "kind", "phase", "unit", "events", "exposure"]
+COLUMNS = ["race", "era", "kind", "phase", "unit", "events", "exposure", "position"]
 
 
 def neutralisation_rows(tables: RaceTables, race: str, era: Era) -> pd.DataFrame:
@@ -48,49 +54,65 @@ def neutralisation_rows(tables: RaceTables, race: str, era: Era) -> pd.DataFrame
         rows.append((kind, "running", int((starts >= 2).sum()), float(at_risk)))
     unit = f"track:{tables.event.circuit_key}"
     return pd.DataFrame(
-        [(race, era.name, kind, phase, unit, n, e) for kind, phase, n, e in rows], columns=COLUMNS
+        [(race, era.name, kind, phase, unit, n, e, 0.0) for kind, phase, n, e in rows],
+        columns=COLUMNS,
     )
 
 
-def retirement_rows(tables: RaceTables, race: str, era: Era) -> pd.DataFrame:
-    """Per team: cars out on the opening lap, and later retirements per lap raced after lap 1.
-    Every retirement counts, mechanical or not: OpenF1 gives no reason."""
+def running_share(race_state: pd.DataFrame) -> pd.DataFrame:
+    """Each car's place after each lap among the cars that completed it, from the front (-0.5)
+    to the back (+0.5): (driver, lap, position). A car has a row for every lap it completed."""
+    by_lap = race_state.groupby("lap")["position"]
+    rank = by_lap.rank(method="first")
+    field = by_lap.transform("size")
+    share = (rank - 1) / (field - 1).clip(lower=1) - 0.5
+    return race_state[["driver", "lap"]].assign(position=share.to_numpy())
+
+
+def retirement_rows(tables: RaceTables, race: str, era: Era, bins: int, lag: int) -> pd.DataFrame:
+    """Per team: cars out on the opening lap. And per team and band of running position: later
+    retirements, and laps raced after lap 1, each lap placed by where the car ran `lag` laps
+    before it began (after lap 1 at the earliest). Every retirement counts, mechanical or not:
+    OpenF1 gives no reason."""
     cars = tables.results[tables.results["status"] != "DNS"]
     done = cars["laps_completed"].fillna(0).astype(int)
     out = cars["status"] == DNF
-    frame = (
-        pd.DataFrame(
-            {
-                "team": cars["team_id"],
-                "lap1_events": (out & (done == 0)).astype(int),
-                "lap1_exposure": 1.0,
-                # A car that retires after completing k laps was at risk on laps 2 .. k + 1.
-                "running_events": (out & (done >= 1)).astype(int),
-                "running_exposure": np.where(out, done, np.maximum(done - 1, 0)).astype(float),
-            }
-        )
-        .groupby("team")
+    unit = "team:" + era.name + ":" + cars["team_id"]
+    lap1 = (
+        pd.DataFrame({"unit": unit, "events": (out & (done == 0)).astype(int), "exposure": 1.0})
+        .groupby("unit", as_index=False)
         .sum()
+        .assign(phase="lap1", position=0.0)
     )
-    rows = [
-        (
-            race,
-            era.name,
-            DNF,
-            phase,
-            f"team:{era.name}:{team}",
-            *r[[f"{phase}_events", f"{phase}_exposure"]],
-        )
-        for team, r in frame.iterrows()
-        for phase in PHASES
-    ]
-    return pd.DataFrame(rows, columns=COLUMNS)
+    # A car that retires after completing k laps was at risk on laps 2 .. k + 1; one that
+    # finished, on laps 2 .. its last.
+    last = np.where(out, done + 1, done)
+    laps = pd.DataFrame(
+        {"driver": cars["driver"], "unit": unit, "lap": [range(2, n + 1) for n in last]}
+    ).explode("lap")
+    laps = laps.dropna(subset=["lap"]).astype({"lap": int})
+    retired_on = dict(zip(cars["driver"], np.where(out & (done >= 1), done + 1, -1), strict=True))
+    laps["events"] = (laps["lap"] == laps["driver"].map(retired_on)).astype(int)
+    laps["at"] = np.maximum(laps["lap"] - 1 - lag, 1)
+    share = running_share(tables.race_state).rename(columns={"lap": "at"})
+    laps = laps.merge(share, on=["driver", "at"], how="left")
+    laps["position"] = laps["position"].fillna(0.0)  # no race state for that lap: mid-field
+    laps["band"] = np.minimum(((laps["position"] + 0.5) * bins).astype(int), bins - 1)
+    running = (
+        laps.groupby(["unit", "band"], as_index=False)
+        .agg(events=("events", "sum"), exposure=("lap", "size"), position=("position", "mean"))
+        .drop(columns="band")
+        .assign(phase="running")
+    )
+    rows = pd.concat([lap1, running], ignore_index=True)
+    return rows.assign(race=race, era=era.name, kind=DNF)[COLUMNS]
 
 
 @dataclass(frozen=True)
 class Index:
     """Integer codes for the model's groups, built from the training rows."""
 
+    era: dict[tuple[str], int]
     family: dict[tuple[str, str], int]
     base: dict[tuple[str, str, str], int]
     unit: dict[tuple[str, str, str], int]
@@ -102,6 +124,7 @@ class Index:
             return {tuple(key): i for i, key in enumerate(keys)}
 
         return cls(
+            era=codes(["era"]),
             family=codes(["kind", "phase"]),
             base=codes(["era", "kind", "phase"]),
             unit=codes(["unit", "kind", "phase"]),
@@ -129,6 +152,10 @@ class RateFit:
         z = self.posterior["z"].to_numpy()[:, i] if i is not None else rng.standard_normal(len(sd))
         return np.exp(base + sd * z)
 
+    def position(self, era: str) -> np.ndarray:
+        """Posterior draws of the change in log retirement rate from the front to the back."""
+        return self.posterior["position"].to_numpy()[:, self.index.era[(era,)]]
+
 
 class RateModel:
     """Compiled once; refitted with any set of rows masked out (their likelihood removed)."""
@@ -143,6 +170,7 @@ class RateModel:
         )
         base_of_row = index.rows(self.rows, "base", ["era", "kind", "phase"])
         unit_of_row = index.rows(self.rows, "unit", ["unit", "kind", "phase"])
+        era_of_row = index.rows(self.rows, "era", ["era"])
         prior = config.priors
         with pm.Model() as model:
             events = pm.Data("events", self.rows["events"].to_numpy())
@@ -150,7 +178,12 @@ class RateModel:
             base = pm.Normal("base", prior.log_rate.mean, prior.log_rate.sd, shape=len(index.base))
             unit_sd = pm.HalfNormal("unit_sd", prior.unit_sd, shape=len(index.family))
             z = pm.Normal("z", 0, 1, shape=len(index.unit))
-            log_rate = base[base_of_row] + unit_sd[family_of_unit][unit_of_row] * z[unit_of_row]
+            position = pm.Normal("position", 0, prior.position_sd, shape=len(index.era))
+            log_rate = (
+                base[base_of_row]
+                + unit_sd[family_of_unit][unit_of_row] * z[unit_of_row]
+                + position[era_of_row] * self.rows["position"].to_numpy()
+            )
             pm.Poisson("observed", mu=exposure * log_rate.exp(), observed=events)
         compiled = nutpie.compile_pymc_model(model)
         assert isinstance(compiled, CompiledPyMCModel)  # the PyMC variant can swap data

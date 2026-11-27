@@ -13,6 +13,7 @@ export interface SyntheticOptions {
   passIntercept?: number;
   warmupS?: number[]; // per stint lap from the out-lap, every compound
   reactSc?: number | null; // safety-car reaction intercept; null: no car reacts
+  dnfPosition?: number; // log-rate change in retirement risk from the front to the back
 }
 
 export function syntheticRace(options: SyntheticOptions = {}): SimRace {
@@ -28,6 +29,7 @@ export function syntheticRace(options: SyntheticOptions = {}): SimRace {
     passIntercept = 0,
     warmupS = [0, 0],
     reactSc = 1,
+    dnfPosition = 0,
   } = options;
   const compounds = [1, 2, 3];
   const repeat = (value: number) => Array.from({ length: draws }, () => value);
@@ -100,6 +102,7 @@ export function syntheticRace(options: SyntheticOptions = {}): SimRace {
             tyre_age_per_10: repeat(1.2),
             race_left: repeat(-2.9),
           },
+    dnf_position_log_rate: repeat(dnfPosition),
     cars: Array.from({ length: cars }, (_, i) => ({
       driver: `D${String(i + 1).padStart(2, "0")}`,
       team_id: `team${Math.floor(i / 2)}`,

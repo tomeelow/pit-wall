@@ -588,6 +588,12 @@
     "reaction": {
       "$ref": "#/$defs/Reaction"
     },
+    "dnf_position_log_rate": {
+      "items": {
+        "type": "number"
+      },
+      "type": "array"
+    },
     "cars": {
       "items": {
         "$ref": "#/$defs/Car"
@@ -627,6 +633,7 @@
     "neutralisations",
     "traffic",
     "reaction",
+    "dnf_position_log_rate",
     "cars",
     "snapshots",
     "first_start_lap",
