@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  actualStrategies,
   checkRules,
   DSQ,
   prepare,
@@ -84,5 +85,43 @@ describe("checkRules", () => {
     expect(checkRules(race, 0, fromLap, [{ lap: 12, compound_c: 9, tyre_age: 0 }]).invalid).toEqual(
       [{ kind: "not-allocated", compound: 9 }],
     );
+  });
+});
+
+describe("actualStrategies for a car that retired", () => {
+  // Car 0 starts on C2 and retires after lap 10 without stopping; the others stop on lap 15.
+  const retiree = (retiredAfter: number) => {
+    const race = syntheticRace({ cars: 6, laps: 30, eventRate: 0, dnfRate: 0 });
+    race.cars[0] = { ...race.cars[0]!, stops: [], finish_position: null, retired_after_lap: retiredAfter };
+    return race;
+  };
+
+  it("adds the stop it still needed, after its retirement, at the race's usual lap", () => {
+    const race = retiree(10);
+    const [plan, ...others] = actualStrategies(race, 5);
+    expect(plan).toEqual([{ lap: 15, compound_c: 1, tyre_age: 0 }]);
+    expect(checkRules(race, 0, 5, plan!).breaks).toEqual([]);
+    expect(others).toEqual(race.cars.slice(1).map((car) => car.stops));
+    expect(actualStrategies(retiree(20), 5)[0]).toEqual([{ lap: 21, compound_c: 1, tyre_age: 0 }]);
+  });
+
+  it("keeps a stint limit and a minimum stop count", () => {
+    const race = retiree(10);
+    race.rules = { ...race.rules, min_stops: 2, max_stint_laps: 12 };
+    const plan = actualStrategies(race, 5)[0]!;
+    expect(plan.map((s) => s.lap)).toEqual([12, 21]);
+    expect(checkRules(race, 0, 5, plan).breaks).toEqual([]);
+  });
+
+  it("is not disqualified when it runs on ex ante", () => {
+    const outcome = runSimulations(retiree(10), {
+      fromLap: 5,
+      sets: [actualStrategies(retiree(10), 5)],
+      runs: 20,
+      seed: 1,
+      mode: { events: "sampled", noise: true },
+    });
+    const car0 = Array.from({ length: 20 }, (_, r) => outcome.status[r * 6]!);
+    expect(car0.filter((s) => s === DSQ)).toEqual([]);
   });
 });

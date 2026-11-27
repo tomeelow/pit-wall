@@ -81,12 +81,12 @@ range (the middle 80 %) about 80 % of the time. Lower than that means it's too s
 
 | Simulating from… | Inside the 50 % range | Inside the 80 % range | Better than "finish where you are now"? |
 |---|---|---|---|
-| All starting points | 49 % | 78 % | Yes |
-| After lap 1 | 53 % | 83 % | Yes |
-| Half distance | 48 % | 78 % | Yes |
+| All starting points | 48 % | 77 % | Yes |
+| After lap 1 | 50 % | 80 % | Yes |
+| Half distance | 48 % | 77 % | Yes |
 | Three quarters | 44 % | 71 % | Yes, by less |
-| Races with no safety car after that point | 52 % | 82 % | Yes |
-| Races where a safety car, VSC or red flag came later | 44 % | 73 % | Yes |
+| Races with no safety car after that point | 51 % | 82 % | Yes |
+| Races where a safety car, VSC or red flag came later | 44 % | 71 % | Yes |
 
 Overall it is honest about its uncertainty, and always more informative than assuming the order
 stays as it is. Where it is **too sure of itself**:
@@ -96,6 +96,9 @@ stays as it is. Where it is **too sure of itself**:
 - **Races where a safety car actually came out later.** When judging a call, the simulator doesn't
   know a safety car is coming; it can only allow for one at random. That's deliberate: a decision
   should be judged on what the team could know.
+- **The front and the back of the grid.** Leaders finish higher, and backmarkers lower, than it
+  expects more often than they should. Its retirement risk depends on the team, not on where the
+  car runs, while cars in the pack retire far more often than cars at the front.
 - **Wet or mixed races** are simulated only after the rain: from the first lap after which every
   car is on known dry tyres to the flag. Rain is never simulated, and the first dry laps on a
   drying track are modelled as if fully dry. Races wet to the end aren't simulated, nor is Miami

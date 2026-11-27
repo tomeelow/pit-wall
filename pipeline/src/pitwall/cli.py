@@ -491,10 +491,11 @@ def fit_warmup(config: PipelineConfig) -> None:
         )
 
 
-def validate_sim(config: PipelineConfig) -> bool:
+def validate_sim(config: PipelineConfig, rebaseline: bool = False) -> bool:
     """Run the engine ex ante over every simulable race in the exported bundle, score it and apply
     the publish gate. Needs `make export` first. A run that fails the gate is kept as
-    calibration.rejected.json; the accepted calibration stays."""
+    calibration.rejected.json; the accepted calibration stays. `rebaseline` (by hand only, never
+    in the weekend workflow) accepts a lower log score than the accepted one: see `gate`."""
     settings = config.sim_validation
     manifest = Manifest.model_validate_json((config.bundle_dir / "manifest.json").read_text())
     races = {
@@ -513,7 +514,15 @@ def validate_sim(config: PipelineConfig) -> bool:
     accepted_path = out / "calibration.json"
     accepted = simulator.accepted_overall(accepted_path)
     thresholds = load_thresholds().simulator
-    report = simulator.calibration(scored, races, settings, accepted, thresholds, _git_sha())
+    report = simulator.calibration(
+        scored, races, settings, accepted, thresholds, _git_sha(), rebaseline
+    )
+    if rebaseline and accepted is not None:
+        logger.warning(
+            "rebaseline: log score {} replaces the accepted {} without the regression check",
+            report.segments[0].log_score,
+            accepted.log_score,
+        )
     scored.drop(columns="counts").to_parquet(out / "validation.parquet", index=False)
     table = pd.DataFrame([s.model_dump() for s in report.segments]).set_index("segment")
     histogram = pd.DataFrame(
@@ -688,8 +697,14 @@ def main() -> None:
     commands.add_parser(
         "fit-warmup", help="fit tyre warm-up per C-number and stint lap; export it per race"
     )
-    commands.add_parser(
+    validate_sim_cmd = commands.add_parser(
         "validate-sim", help="calibrate the simulator on the exported bundle; apply the gate"
+    )
+    validate_sim_cmd.add_argument(
+        "--rebaseline",
+        action="store_true",
+        help="accept a lower log score than the accepted calibration (after a scoring or engine "
+        "fix that made the accepted score wrong); every other gate check still applies",
     )
     commands.add_parser("export", help="write the static bundle from all ingested races")
 
@@ -737,7 +752,7 @@ def main() -> None:
         case "fit-warmup":
             fit_warmup(config)
         case "validate-sim":
-            if not validate_sim(config):
+            if not validate_sim(config, args.rebaseline):
                 sys.exit(1)
         case "export":
             export(config)
