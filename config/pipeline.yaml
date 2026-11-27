@@ -112,6 +112,13 @@ events:
   stint_cap:
     quantile: 0.95
     min_stints: 30
+  # Stops brought forward when a safety car or VSC starts (ADR-004, amended 2026-11-21). Outcome:
+  # a car with a stop still to make takes it within window_laps of the start. Coefficients get a
+  # Normal(0, prior_sd) prior; draws are fits on bootstrap resamples of the era's other races.
+  reaction:
+    window_laps: 2
+    prior_sd: 2.0
+    seed: 20260309
   hazards:
     # A fit takes seconds, and every race gets its own masked refit, each gated: long chains and a
     # high target keep rare families (three lap-1 red flags; their unit_sd funnels) under the gate.

@@ -25,6 +25,7 @@ from pitwall.export.contract import (
     NeutralisationParams,
     PitLoss,
     PlannedStop,
+    Reaction,
     Rules,
     SimRace,
     Snapshot,
@@ -291,6 +292,9 @@ def build_sim(
             beta_pace_delta_s=per_draw(traffic_draws, "beta_pace_delta_s"),
             beta_within_drs=per_draw(traffic_draws, "beta_within_drs"),
         ),
+        reaction=Reaction(**{name: values[:n] for name, values in events["reaction"].items()})
+        if events["reaction"]
+        else Reaction(intercept_sc=[], intercept_vsc=[], tyre_age_per_10=[], race_left=[]),
         cars=cars,
         snapshots=states,
         first_start_lap=first_start_lap,

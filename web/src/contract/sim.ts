@@ -16,6 +16,7 @@ export interface SimRace {
   pit_loss: PitLoss;
   neutralisations: NeutralisationParams[];
   traffic: Traffic;
+  reaction: Reaction;
   cars: Car[];
   snapshots: Snapshot[];
   first_start_lap: number;
@@ -89,6 +90,18 @@ export interface Traffic {
 export interface DirtyAirBin {
   gap_upto_s: number;
   loss_s: number;
+}
+/**
+ * On the first lap of a sampled SC or VSC (ex ante only), a car with a planned stop still to
+ * make takes it at once with P = logistic(intercept_sc or intercept_vsc
+ * + tyre_age_per_10 * tyre_age / 10 + race_left * (total_laps - lap) / total_laps), tyre_age
+ * counting the lap being driven. Empty lists: no reaction. Per draw.
+ */
+export interface Reaction {
+  intercept_sc: number[];
+  intercept_vsc: number[];
+  tyre_age_per_10: number[];
+  race_left: number[];
 }
 export interface Car {
   driver: string;

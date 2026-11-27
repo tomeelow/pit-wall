@@ -311,6 +311,44 @@
       "title": "PlannedStop",
       "type": "object"
     },
+    "Reaction": {
+      "additionalProperties": false,
+      "description": "On the first lap of a sampled SC or VSC (ex ante only), a car with a planned stop still to\nmake takes it at once with P = logistic(intercept_sc or intercept_vsc\n+ tyre_age_per_10 * tyre_age / 10 + race_left * (total_laps - lap) / total_laps), tyre_age\ncounting the lap being driven. Empty lists: no reaction. Per draw.",
+      "properties": {
+        "intercept_sc": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "intercept_vsc": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "tyre_age_per_10": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "race_left": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "intercept_sc",
+        "intercept_vsc",
+        "tyre_age_per_10",
+        "race_left"
+      ],
+      "title": "Reaction",
+      "type": "object"
+    },
     "Rules": {
       "additionalProperties": false,
       "description": "What every finishing strategy must satisfy; breaking a rule is a disqualification. A stop\nunder a red flag costs nothing when red_flag_free_tyre_change is set. A car that retires is\nstill classified if it covered classified_fraction of the race's laps (rounded down).",
@@ -547,6 +585,9 @@
     "traffic": {
       "$ref": "#/$defs/Traffic"
     },
+    "reaction": {
+      "$ref": "#/$defs/Reaction"
+    },
     "cars": {
       "items": {
         "$ref": "#/$defs/Car"
@@ -585,6 +626,7 @@
     "pit_loss",
     "neutralisations",
     "traffic",
+    "reaction",
     "cars",
     "snapshots",
     "first_start_lap",

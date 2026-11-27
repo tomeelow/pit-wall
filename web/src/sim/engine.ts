@@ -1,5 +1,5 @@
 import type { Draw, Randoms } from "./draw.ts";
-import { GREEN, KINDS, RED, SC, type Plan, type Prepared } from "./prepare.ts";
+import { GREEN, KINDS, RED, SC, VSC, type Plan, type Prepared } from "./prepare.ts";
 
 /**
  * events "sampled": safety cars, VSCs, red flags and DNFs are drawn from their rates (ex ante).
@@ -83,7 +83,9 @@ export function createTrace(prepared: Prepared): Trace {
 
 /**
  * One race from `prepared.fromLap` to the flag. Deterministic: the same inputs give the same
- * outcome. Opponents are open-loop: every car follows its plan whatever happens.
+ * outcome. Every car follows its plan, with one reaction (ADR-004): on the first lap of a sampled
+ * safety car or VSC, a car with a planned stop still to make may take it at once. Ex post the
+ * plans already hold the real reactions, so none is added.
  */
 export function simulateRace(
   prepared: Prepared,
@@ -134,6 +136,7 @@ export function simulateRace(
   const rateToP = (rate: number) => 1 - Math.exp(-rate);
 
   for (let lap = prepared.fromLap + 1; lap <= total; lap++) {
+    let started = false;
     if (sampled) {
       if (kind !== GREEN && lap > kindEnd) kind = GREEN;
       if (kind === GREEN) {
@@ -146,6 +149,7 @@ export function simulateRace(
             const pick = Math.floor(random.duration[lap]! * durations.length);
             kind = j;
             kindEnd = lap + (durations[pick] ?? 1) - 1;
+            started = kind === SC || kind === VSC;
             break;
           }
         }
@@ -183,7 +187,17 @@ export function simulateRace(
           ? base + warmup + (mode.noise ? draw.noiseSd * random.lapNoise[cell]! : 0)
           : base * prepared.lapFactor[kind]!;
       const s = ws.nextStop[i]!;
-      if (s < plan.offset[i + 1]! && plan.lap[s] === lap) {
+      const planned = s < plan.offset[i + 1]!;
+      let stops = planned && plan.lap[s] === lap;
+      if (!stops && planned && started) {
+        const logit =
+          (kind === SC ? draw.reactSc : draw.reactVsc) +
+          (draw.reactAge * (ws.age[i]! + 1)) / 10 +
+          (draw.reactLeft * (total - lap)) / total;
+        const p = 1 / (1 + Math.exp(-logit));
+        stops = mode.noise ? random.react[cell]! < p : p > 0.5;
+      }
+      if (stops) {
         ws.pitting[i] = 1;
         const quantile = Math.floor(random.stationary[cell]! * prepared.stationary.length);
         const stationary = mode.noise ? prepared.stationary[quantile]! : stationaryMedian;
