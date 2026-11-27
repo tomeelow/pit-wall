@@ -147,6 +147,18 @@ def test_gate_rejects_regressions_against_the_accepted_calibration() -> None:
     assert simulator.gate(rows, small_change, before, GATE).passed
 
 
+def test_a_rebaseline_drops_only_the_log_score_comparison() -> None:
+    rows = scored_rows(-2.0, -2.5)
+    before = accepted(-1.90, 0.50).segments[0]
+    assert simulator.gate(
+        rows, accepted(-1.95, 0.50).segments[0], before, GATE, rebaseline=True
+    ).passed
+    worse_coverage = accepted(-1.95, 0.42).segments[0]
+    assert not simulator.gate(rows, worse_coverage, before, GATE, rebaseline=True).passed
+    late_loss = simulator.gate(scored_rows(-2.6, -2.5), before, before, GATE, rebaseline=True)
+    assert not late_loss.passed
+
+
 def test_the_gate_reads_the_accepted_score_across_contract_versions(tmp_path: Path) -> None:
     assert simulator.accepted_overall(tmp_path / "none.json") is None
     old = json.loads(accepted(-1.9, 0.5).model_dump_json()) | {"schema_version": "0.1.0"}

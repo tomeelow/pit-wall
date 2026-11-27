@@ -211,7 +211,10 @@ def gate(
     overall: SegmentScore,
     accepted: SegmentScore | None,
     thresholds: SimulatorGate,
+    rebaseline: bool = False,
 ) -> GateResult:
+    """`rebaseline` drops only the log-score comparison with the accepted calibration, for a run
+    after a fix to the scoring or the engine that made the accepted score itself wrong."""
     reasons = []
     late = scored[scored["fraction"] >= thresholds.must_beat_baseline_from]
     for fraction, rows in late.groupby("fraction"):
@@ -223,7 +226,10 @@ def gate(
             )
     if accepted is not None:
         before = accepted
-        if overall.log_score < before.log_score - thresholds.max_log_score_regression:
+        if (
+            not rebaseline
+            and overall.log_score < before.log_score - thresholds.max_log_score_regression
+        ):
             reasons.append(f"log score fell from {before.log_score} to {overall.log_score}")
         for level, now, then in (
             (0.5, overall.coverage_50, before.coverage_50),
@@ -241,6 +247,7 @@ def calibration(
     accepted: SegmentScore | None,
     thresholds: SimulatorGate,
     git_sha: str,
+    rebaseline: bool = False,
 ) -> Calibration:
     parts = segments(scored)
     versions = sorted(r.dataset_version for r in races.values())
@@ -252,5 +259,5 @@ def calibration(
         runs=settings.runs,
         segments=parts,
         pit_histogram=pit_histogram(scored, settings.pit_bins),
-        gate=gate(scored, parts[0], accepted, thresholds),
+        gate=gate(scored, parts[0], accepted, thresholds, rebaseline),
     )

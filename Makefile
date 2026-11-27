@@ -34,8 +34,10 @@ replay:
 
 # Simulator calibration on the exported bundle, with the publish gate (config/thresholds.yaml).
 # Run `make export` before (sim inputs) and after (to publish the accepted calibration).
+# REBASELINE=1 skips only the log-score regression check, once, after a fix that made the accepted
+# score wrong; say why in the commit.
 validate-sim:
-	$(PY) pitwall validate-sim
+	$(PY) pitwall validate-sim $(if $(REBASELINE),--rebaseline)
 
 # The undercut module against every green pair of adjacent cars that stopped on consecutive laps
 # (needs `make export`). Settings from config/pipeline.yaml (sim_validation).

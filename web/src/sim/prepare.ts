@@ -1,5 +1,5 @@
 import type { PlannedStop, SimRace } from "../contract/sim";
-import { minDryCompounds } from "./rules.ts";
+import { checkRules, minDryCompounds } from "./rules.ts";
 
 /** Neutralisation kinds, by index in every per-kind array of the engine. */
 export const KINDS = ["SC", "VSC", "RED"] as const;
@@ -122,9 +122,55 @@ export function prepare(race: SimRace, fromLap: number): Prepared {
   };
 }
 
-/** The strategies the cars actually ran, from the start lap on. */
+/**
+ * The strategies the cars actually ran, from the start lap on. A car that retired gets the stops
+ * it still needed to finish legally (see `continuation`).
+ */
 export function actualStrategies(race: SimRace, fromLap: number): Strategy[] {
-  return race.cars.map((car) => car.stops.filter((stop) => stop.lap > fromLap));
+  return race.cars.map((car, i) =>
+    continuation(race, i, fromLap, car.stops.filter((stop) => stop.lap > fromLap)),
+  );
+}
+
+/**
+ * A car that retired only made the stops it made before retiring. Ex ante it may run to the
+ * flag, and on that cut-short plan it would be disqualified in almost every run: the forecast
+ * would know it does not finish. So it gets the stops it still needs to be legal, after its
+ * retirement lap, each at the race's median lap for that stop and on the compound most often
+ * fitted there that it has not used.
+ */
+function continuation(race: SimRace, car: number, fromLap: number, stops: Strategy): Strategy {
+  const retired = race.cars[car]!.retired_after_lap;
+  const snapshot = race.snapshots.find((s) => s.lap === fromLap);
+  if (retired === null || !snapshot) return stops;
+  const { max_stint_laps } = race.rules;
+  const plan = [...stops];
+  // Every pass adds a stop later than the last one, so this ends before the flag.
+  for (;;) {
+    const { invalid, breaks } = checkRules(race, car, fromLap, plan);
+    if (invalid.length > 0 || breaks.length === 0) break;
+    const next = (snapshot.stops[car] ?? 0) + plan.length;
+    const real = race.cars.flatMap((c) => c.stops[next] ?? []);
+    const after = Math.max(fromLap, retired, plan.at(-1)?.lap ?? 0);
+    const stintStart = plan.at(-1)?.lap ?? fromLap - (snapshot.stint_laps[car] ?? 0);
+    let lap = Math.max(after + 1, median(real.map((s) => s.lap)) ?? Math.round((after + race.total_laps) / 2));
+    if (max_stint_laps !== null) lap = Math.min(lap, stintStart + max_stint_laps);
+    lap = Math.min(lap, race.total_laps - 1);
+    if (lap <= after) break;
+    const used = new Set([...(snapshot.dry_compounds[car] ?? []), ...plan.map((s) => s.compound_c)]);
+    const fresh = race.compounds.filter((c) => !used.has(c));
+    const choices = fresh.length > 0 ? fresh : race.compounds;
+    const fitted = (c: number) => real.filter((s) => s.compound_c === c).length;
+    const compound_c = choices.reduce((best, c) => (fitted(c) > fitted(best) ? c : best));
+    plan.push({ lap, compound_c, tyre_age: 0 });
+  }
+  return plan;
+}
+
+function median(values: readonly number[]): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[(sorted.length - 1) >> 1]!;
 }
 
 /** Per-car stops as flat arrays, checked against the race. */

@@ -27,7 +27,7 @@ Update this table as phases land. It is the first thing to read when picking up 
 | 4 — Pit loss, SC/VSC, reliability | ☑ done | Pit loss per track (green 19–28 s; SC/VSC factors per era: 0.68/0.84× in 2023–25, ~0.95× in 2026), SC/VSC/red/DNF rates per race with that race masked out; per-track rates barely beat era-wide. 2026 rebuilt with VSCs. Phase 4 → Findings |
 | 5 — Traffic & overtaking | ☑ done | Dirty air only matters within 0.5 s (0.47 s/lap); pass model (gap, pace delta, within 1 s, track) beats the gap-only baseline out of sample (log loss 0.134 vs 0.173) and is well calibrated 1–70 %; under-predicts passes from 1.5–3 s back. Phase 5 → Findings |
 | 6 — Simulation engine | ☑ done | Seeded TS engine with CRN, worker pool and contract 0.2.0 sim inputs for 76/90 races; 10 000 × 60 × 20 in 1.5 s on one thread (CI budget 6 s); zero-noise replay misses the result by 1.24 positions vs 2.33 for the lap-1 order. Open-loop stops under sampled SCs fatten ex-ante tails — Phase 7's first question. Phase 6 → Findings |
-| 7 — Simulator validation | ☑ done | 75 dry races × 4 start laps × 1,000 ex-ante runs: coverage 0.48 / 0.78 at 50 / 80 %, log score −1.93 vs −2.38 for the order at the start lap; beats both baselines in every segment. Overconfident from 75 % distance (0.44 / 0.71) and after real neutralisations; Miami 2025 refused (race-time gap). Phase 7 → Findings |
+| 7 — Simulator validation | ☑ done | 75 dry races × 4 start laps × 1,000 ex-ante runs: coverage 0.48 / 0.77 at 50 / 80 %, log score −1.97 vs −2.38 for the order at the start lap; beats both baselines in every segment. Overconfident from 75 % distance (0.44 / 0.71) and after real neutralisations; Miami 2025 refused (race-time gap). Rebaselined 2026-11 after a hindsight leak (retirees disqualified ex ante) was fixed. Phase 7 → Findings |
 | 8 — Strategy optimiser, counterfactuals, undercut | ☑ done | Counterfactual, optimiser (successive halving, recovers a known optimum), undercut and debrief in `web/src/sim`; tyre warm-up fitted (≤ 0.64 s, barely moves calibration). Undercut beats the base rate on 181 real pairs (Brier 0.185 vs 0.205). Full search 4 s on one thread. Debrief prefers later stops (open-loop rivals, linear wear). Phase 8 → Findings |
 | 9 — Strategy lab UI | ☑ done | Rim theme, dark first (light on request). Race, What if, Optimise, Undercut and Model card screens, all simulation on the worker pool, view kept in the URL; editor rule check mirrors the engine's DSQ test. Calibration is shown per segment: no per-track scores are exported yet. Phase 9 → Findings |
 | 10 — Analytics: replay, telemetry, debrief | ☑ done | Replay, Telemetry and Debrief screens. Fastest-lap car data and one lap of location per race (ADR-007) instead of full-race traces; cars placed on the replay by official lap times. Debrief runs on demand in the browser, ex ante and ex post in separate tables. `pitwall export` fails over the budgets in `config/budgets.yaml`. Phase 10 → Findings |
@@ -1020,6 +1020,37 @@ The PIT histogram, in 10 bins, is close to flat with a slight U shape:
 - `finishCounts` places each car once per run, and a car already out is never classified.
 - `startLaps` maps fractions to laps.
 - The backtest script runs on Node's type stripping, still without `@types/node`.
+
+**Retirees' strategies (2026-11, a hindsight leak).** A car that really retired carried only the
+stops it made before retiring. Ex ante it may run to the flag, and on that cut-short plan it was
+disqualified in about 97 % of runs (two-compound rule): the forecast knew it would not finish.
+That affected 77 car × start-lap entries, 3 % of all simulated cars from lap 1, and the What if,
+Optimise and Debrief rivals in the same way. `actualStrategies` now gives such a car the stops it
+still needs to be legal: after its retirement lap, at the race's median lap for that stop number
+(capped by a stint limit), on the compound most often fitted there that it has not used. The
+zero-noise replay is unchanged (1.30 positions); simulated disqualifications of actual strategies
+fell to 0. Calibration got honestly worse:
+
+| | Coverage 50 / 80 | Log score |
+|---|---|---|
+| All, before → after | 0.486 / 0.785 → 0.478 / 0.772 | −1.939 → −1.973 |
+| From after lap 1 | 0.522 / 0.839 → 0.500 / 0.802 | −2.112 → −2.194 |
+| From 75 % | 0.435 / 0.712, unchanged | −1.699, unchanged |
+
+The fall breaks the 0.02 regression limit against a score the bug had inflated, so this run was
+accepted once with `make validate-sim REBASELINE=1`, which drops only that comparison; the other
+gate checks still applied. The weekend workflow never rebaselines.
+
+**What the same diagnostic found about the field squeeze** (front-runners finish better, the
+back of the grid worse, than forecast; PIT tails 15 % low for P1–3, 11–21 % high for P16+):
+- Not pace shrinkage: for drivers with more than 10 clean laps the fitted pace is within a
+  median 0.02 s/lap of their raw clean-lap pace.
+- Not too much randomness: without lap noise, retirements or sampled neutralisations the P1–3
+  low tail gets worse (0.152 → 0.169 / 0.171 / 0.158).
+- Retirement risk is flat by position but real risk is not. Not classified, simulated vs real, by
+  place at the start lap: P1–3 4.2 vs 2.5 %, P4–10 5.3 vs 4.4 %, P11–15 6.5 vs 4.6 %, P16+ 9.2 vs
+  12.5 %. The per-team rate matches the raw rate (0.0022 vs 0.0021 per lap). A running-position
+  term in the retirement model is the candidate fix; it is a new model term and needs review.
 
 ---
 
