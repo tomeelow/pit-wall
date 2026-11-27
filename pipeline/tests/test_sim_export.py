@@ -146,6 +146,16 @@ def test_race_carries_its_rules_and_realised_events(
     assert REGULATIONS.rules(2024, 8).min_stops == 0
 
 
+def test_a_race_fitted_before_the_reaction_model_exports_without_one(
+    race_folder: Path, race_tables: RaceTables
+) -> None:
+    path = race_folder / "events.json"
+    events = json.loads(path.read_text())
+    del events["reaction"]
+    path.write_text(json.dumps(events))
+    assert build(race_folder, race_tables).reaction.intercept_sc == []
+
+
 def test_races_the_engine_cannot_run_are_refused(
     race_folder: Path, race_tables: RaceTables, tmp_path: Path
 ) -> None:
