@@ -155,7 +155,7 @@ export function Debrief({
   return (
     <>
       <div className="split split-narrow">
-        <section className="panel">
+        <section className="panel" data-tour="debrief">
           <header>
             <h2>{tx.title}</h2>
           </header>

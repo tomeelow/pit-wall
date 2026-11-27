@@ -100,8 +100,10 @@ export function WhatIf({
           <span className="sub">{race.cars[car]!.driver}</span>
         </header>
         <div className="body">
-          <LapField label={tx.decideAfter} laps={laps} value={fromLap} total={total} onChange={onLap} />
-          <div className="lanes">
+          <div data-tour="decide">
+            <LapField label={tx.decideAfter} laps={laps} value={fromLap} total={total} onChange={onLap} />
+          </div>
+          <div className="lanes" data-tour="lanes">
             <p className="lane-name">{tx.actual}</p>
             <StintLane laps={total} name={tx.actualLane} stints={planLane(t, race, car, fromLap, actual)} tall />
             <p className="lane-name">{tx.alternative}</p>
@@ -115,7 +117,7 @@ export function WhatIf({
             />
             <LapAxis laps={total} />
           </div>
-          <table className="stops">
+          <table className="stops" data-tour="stops">
             <thead>
               <tr>
                 <th>{tx.stop}</th>
@@ -156,7 +158,7 @@ export function WhatIf({
               ))}
             </tbody>
           </table>
-          <div className="row">
+          <div className="row" data-tour="stops">
             <button type="button" className="quiet" onClick={add}>
               {tx.addStop}
             </button>
@@ -165,20 +167,20 @@ export function WhatIf({
             </button>
           </div>
           {rules.invalid.length > 0 ? (
-            <ul className="rules rules-invalid">
+            <ul className="rules rules-invalid" data-tour="run">
               {rules.invalid.map((issue) => (
                 <li key={issue.kind}>{t.rule(issue)}</li>
               ))}
             </ul>
           ) : rules.breaks.length > 0 ? (
-            <ul className="rules rules-break">
+            <ul className="rules rules-break" data-tour="run">
               <li>{tx.disqualified}</li>
               {rules.breaks.map((issue) => (
                 <li key={issue.kind}>{t.rule(issue)}</li>
               ))}
             </ul>
           ) : (
-            <p className="rules rules-ok">{tx.legal}</p>
+            <p className="rules rules-ok" data-tour="run">{tx.legal}</p>
           )}
           <Segmented
             label={tx.events}
@@ -189,13 +191,13 @@ export function WhatIf({
               { value: "realised", label: tx.realised },
             ]}
           />
-          <button type="button" className="primary" disabled={rules.invalid.length > 0} onClick={go}>
+          <button type="button" className="primary" data-tour="run" disabled={rules.invalid.length > 0} onClick={go}>
             {tx.run(runs)}
           </button>
         </div>
       </section>
 
-      <section className="panel" aria-live="polite">
+      <section className="panel" aria-live="polite" data-tour="results">
         <header>
           <h2>{tx.finishing}</h2>
           {result && <span className="sub num">{tx.sameDraws(result.actual.runs)}</span>}

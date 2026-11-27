@@ -217,6 +217,29 @@ button { cursor: pointer; border-radius: 0; }
 .swings { margin-top: var(--space-md); }
 .swings h3 { margin: var(--space-sm) 0 0; font-size: var(--text-sm); }
 
+/* Guided tour: a dimmed page with one lit control, and a card that follows it */
+.help { width: 32px; padding: 0; font-weight: 500; }
+.tour-block { position: fixed; inset: 0; z-index: var(--z-modal); }
+.tour-ring { position: fixed; z-index: var(--z-modal); pointer-events: none; outline: 2px solid var(--color-accent); outline-offset: 0; box-shadow: 0 0 0 100vmax color-mix(in oklab, var(--color-paper-3) 74%, transparent); transition: top var(--dur-long) var(--ease-out), left var(--dur-long) var(--ease-out), width var(--dur-long) var(--ease-out), height var(--dur-long) var(--ease-out), outline-color var(--dur-short) var(--ease-out); animation: tour-pulse 1.6s var(--ease-in-out) infinite; }
+.tour-ring-off { outline-color: transparent; animation: none; }
+@keyframes tour-pulse { 50% { outline-offset: 5px; outline-color: color-mix(in oklab, var(--color-accent) 40%, transparent); } }
+.tour-card { position: fixed; z-index: var(--z-modal); width: min(360px, calc(100vw - 24px)); background: var(--color-paper-2); border: var(--rule-hair) solid var(--color-rule); border-top: 0; box-shadow: 0 12px 40px oklch(0% 0 0 / 0.35); }
+.tour-glide { transition: top var(--dur-long) var(--ease-out), left var(--dur-long) var(--ease-out); }
+.tour-progress { height: 3px; background: var(--color-rule); }
+.tour-progress span { display: block; height: 100%; background: var(--color-accent); transition: width var(--dur-long) var(--ease-out); }
+.tour-copy { display: grid; gap: var(--space-xs); padding: var(--space-md) var(--space-md) 0; animation: tour-in var(--dur-long) var(--ease-out); }
+.tour-copy h2 { font-size: var(--text-lg); }
+.tour-copy p:not(.sub) { color: var(--color-ink-2); }
+.tour-copy .field { margin: var(--space-xs) 0 0; }
+.tour-try { padding: var(--space-xs) var(--space-sm); border-left: 2px solid var(--color-accent); background: var(--color-paper-3); }
+.tour-try b { color: var(--color-accent); font-weight: 500; }
+@keyframes tour-in { from { opacity: 0; transform: translateY(6px); } }
+.tour-actions { display: flex; align-items: center; gap: var(--space-xs); padding: var(--space-md); }
+.tour-skip { margin-right: auto; color: var(--color-muted); font-weight: 400; }
+.tour-next { min-height: 32px; margin-left: auto; padding: 0 var(--space-md); border: 0; background: var(--color-accent); color: var(--color-accent-ink); font-weight: 500; }
+.tour-next:hover { background: color-mix(in oklab, var(--color-accent) 85%, var(--color-ink)); }
+.tour-skip + .tour-next, .quiet + .tour-next { margin-left: 0; }
+
 /* States */
 .empty, .failure { padding: var(--space-xl) var(--space-md); display: grid; gap: var(--space-xs); justify-items: start; }
 .empty h3, .failure h3 { font-size: var(--text-md); }
