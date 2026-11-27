@@ -1052,6 +1052,31 @@ back of the grid worse, than forecast; PIT tails 15 % low for P1–3, 11–21 % 
   12.5 %. The per-team rate matches the raw rate (0.0022 vs 0.0021 per lap). A running-position
   term in the retirement model is the candidate fix; it is a new model term and needs review.
 
+**Running-position term in the retirement model (2026-11, draft, not shipped).** Later
+retirements get `position[era] × x`, x the car's place among the cars running from the front
+(−0.5) to the back (+0.5), Normal(0, 1) prior; a team's rate becomes its mid-field rate. The
+engine places every running car at the start of each lap and scales its rate.
+- A lap is placed by where the car ran 5 laps earlier (`position_lag_laps`). A car about to
+  retire often drops back first. Raw retirements per 1,000 laps, front fifth to back fifth:
+  0.70 → 6.21 placed on the lap before, 0.79 → 5.13 five laps before, 0.84 → 5.01 ten before.
+  Without the lag the fitted effect was 3.4 (≈ 30× from the front to the back) and two masked
+  fits failed the gate; with it, 2.07 (1.54–2.63) in 2023–25 and 2.08 (1.34–2.79) in 2026, all
+  90 masked fits pass.
+- The back of the field is still far riskier than a linear log-rate allows (the back fifth
+  jumps), and part of that is cars running last because they are already damaged, which the
+  engine's healthy cars are not.
+- Calibration on the same local data (81 races), before → with the term:
+
+  | | Coverage 50 / 80 | Log score | P1–3 low tail | P16+ high tail |
+  |---|---|---|---|---|
+  | All | 0.484 / 0.775 → 0.469 / 0.767 | −1.9718 → −1.9731 | 0.150 → 0.159 | 0.156 → 0.124 |
+  | From after lap 1 | 0.511 / 0.812 → 0.501 / 0.799 | −2.200 → −2.186 | | |
+  | From 75 % | 0.437 / 0.712 → 0.419 / 0.697 | −1.699 → −1.717 | | |
+
+  It fixes the back of the grid and helps early in the race, but the front-runner squeeze stays
+  (it is not mainly retirements), late-race forecasts get more overconfident, and the overall
+  score does not move beyond refit noise. By the bar applied to reactive stops, it stays a draft.
+
 ---
 
 ## Phase 8 — Strategy Optimiser, Counterfactuals, Undercut

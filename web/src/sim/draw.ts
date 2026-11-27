@@ -11,7 +11,8 @@ export interface Draw {
   slope: Float64Array; // per car x compound
   offset: Float64Array; // per compound
   warmup: Float64Array; // per compound x stint lap (0 is the out-lap)
-  dnfRate: Float64Array; // per car, per lap
+  dnfRate: Float64Array; // per car, per lap, in mid-field
+  dnfPosition: number; // log-rate change from the front of the running order to the back
   eventRate: Float64Array; // per kind, per green lap
   intercept: number;
   betaGap: number;
@@ -33,6 +34,7 @@ export function createDraw(prepared: Prepared): Draw {
     offset: new Float64Array(prepared.compounds),
     warmup: new Float64Array(prepared.compounds * prepared.warmupLaps),
     dnfRate: new Float64Array(prepared.cars),
+    dnfPosition: 0,
     eventRate: new Float64Array(KINDS.length),
     intercept: 0,
     betaGap: 0,
@@ -63,6 +65,8 @@ export function fillDraw(race: SimRace, d: number | "mean", out: Draw): void {
     out.dnfRate[i] = at(car.dnf_rate_per_lap);
     for (let c = 0; c < k; c++) out.slope[i * k + c] = at(car.slope_s_per_lap[c]!);
   });
+  // Without a fitted running-position effect retirement risk is flat.
+  out.dnfPosition = race.dnf_position_log_rate.length === 0 ? 0 : at(race.dnf_position_log_rate);
   KINDS.forEach((kind, j) => {
     out.eventRate[j] = at(race.neutralisations.find((p) => p.kind === kind)!.rate_per_lap);
   });

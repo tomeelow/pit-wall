@@ -46,6 +46,10 @@ def write_models(folder: Path, tables: RaceTables, drivers: tuple[str, ...]) -> 
         for kind, unit in units
         for phase in ("lap1", "running")
     ]
+    hazard += [
+        {"draw": d, "kind": "DNF", "phase": "position", "unit": "era:2023-2025", "rate": 0.8}
+        for d in range(DRAWS)
+    ]
     pd.DataFrame(hazard).to_parquet(folder / "hazard_draws.parquet", index=False)
     events = {
         "pit_transit_s": 20.0,
@@ -142,8 +146,18 @@ def test_race_carries_its_rules_and_realised_events(
     ]
     assert sim.degradation.max_stint_laps == [40, 35, 30]  # C2 has no cap of its own
     assert sim.reaction.intercept_sc == [1.0] * sim.draws  # trimmed to the race's draws
+    assert sim.dnf_position_log_rate == [0.8] * sim.draws
     assert REGULATIONS.rules(2025, 8).min_stops == 2  # Monaco 2025
     assert REGULATIONS.rules(2024, 8).min_stops == 0
+
+
+def test_a_race_fitted_before_the_position_term_exports_flat_retirement_risk(
+    race_folder: Path, race_tables: RaceTables
+) -> None:
+    path = race_folder / "hazard_draws.parquet"
+    hazard = pd.read_parquet(path)
+    hazard[hazard["phase"] != "position"].to_parquet(path, index=False)
+    assert build(race_folder, race_tables).dnf_position_log_rate == []
 
 
 def test_a_race_fitted_before_the_reaction_model_exports_without_one(

@@ -104,7 +104,9 @@ class History:
                 reactions.append(found.assign(race=race, era=era.name))
             rows += [
                 hazards.neutralisation_rows(t, race, era),
-                hazards.retirement_rows(t, race, era),
+                hazards.retirement_rows(
+                    t, race, era, config.hazards.position_bins, config.hazards.position_lag_laps
+                ),
             ]
         non_empty = [s for s in stops if not s.empty]
         return cls(
@@ -175,7 +177,9 @@ class History:
 def race_hazards(
     fit: hazards.RateFit, tables: RaceTables, era: str, n: int, rng: np.random.Generator
 ) -> pd.DataFrame:
-    """`n` rate draws for the race's track (SC, VSC, red flag) and each of its teams (DNF)."""
+    """`n` rate draws for the race's track (SC, VSC, red flag) and each of its teams (DNF), plus
+    the era's running-position effect on retirements, as phase "position" with the change in log
+    rate from the front to the back in `rate`."""
     picks = np.linspace(0, len(fit.posterior["sample"]) - 1, n).round().astype(int)
     units = [(kind, f"track:{tables.event.circuit_key}") for kind in hazards.KINDS]
     teams = sorted(set(tables.results["team_id"]))
@@ -193,7 +197,16 @@ def race_hazards(
         for kind, unit in units
         for phase in hazards.PHASES
     ]
-    return pd.concat(frames, ignore_index=True)
+    position = pd.DataFrame(
+        {
+            "draw": np.arange(n),
+            "kind": hazards.DNF,
+            "phase": "position",
+            "unit": f"era:{era}",
+            "rate": fit.position(era)[picks],
+        }
+    )
+    return pd.concat([*frames, position], ignore_index=True)
 
 
 def validate_season(
@@ -257,6 +270,9 @@ class EventsCard(BaseModel):
     passed: bool
     # Events per lap (running) or per start (lap1), median and 90 % interval, per era.
     rates: dict[str, dict[str, list[float]]]
+    # Change in a later retirement's log rate from the front of the running order to the back,
+    # median and 90 % interval, per era.
+    retirement_position: dict[str, list[float]]
     stops: dict[str, int]
     pit_condition_factor: dict[str, dict[str, float]]  # per era
     stationary_quantiles_s: dict[str, float]
@@ -277,6 +293,10 @@ def model_card(history: History, fit: hazards.RateFit, git_sha: str) -> EventsCa
         diagnostics=fit.diagnostics,
         passed=fit.passed,
         rates=rates,
+        retirement_position={
+            era: [round(float(v), 3) for v in np.quantile(fit.position(era), [0.05, 0.5, 0.95])]
+            for (era,) in fit.index.era
+        },
         stops={str(k): int(v) for k, v in history.stops["condition"].value_counts().items()},
         pit_condition_factor={
             str(era): {k: round(v, 3) for k, v in pit_loss.condition_factors(stops).items()}

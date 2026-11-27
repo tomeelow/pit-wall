@@ -17,6 +17,7 @@ export interface SimRace {
   neutralisations: NeutralisationParams[];
   traffic: Traffic;
   reaction: Reaction;
+  dnf_position_log_rate: number[];
   cars: Car[];
   snapshots: Snapshot[];
   first_start_lap: number;

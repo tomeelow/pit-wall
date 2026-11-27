@@ -90,11 +90,14 @@ class ReactionConfig(_Config):
 class HazardPriors(_Config):
     log_rate: NormalPrior
     unit_sd: float = Field(gt=0)
+    position_sd: float = Field(gt=0)
 
 
 class HazardConfig(_Config):
     sampler: SamplerConfig
     priors: HazardPriors
+    position_bins: int = Field(ge=1)
+    position_lag_laps: int = Field(ge=0)
     gate: GateConfig
     export_draws: int = Field(ge=1)
     validation_seasons: list[int] = Field(min_length=1)

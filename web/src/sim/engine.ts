@@ -27,6 +27,7 @@ export interface Workspace {
   stops: Int32Array;
   used: Int32Array;
   alive: Uint8Array;
+  dnfRisk: Float64Array; // per car: P(retiring on this lap)
   lapsDone: Int32Array;
   nextStop: Int32Array;
   pitting: Uint8Array;
@@ -59,6 +60,7 @@ export function createWorkspace(prepared: Prepared): Workspace {
     stops: new Int32Array(n),
     used: new Int32Array(n),
     alive: new Uint8Array(n),
+    dnfRisk: new Float64Array(n),
     lapsDone: new Int32Array(n),
     nextStop: new Int32Array(n),
     pitting: new Uint8Array(n),
@@ -159,13 +161,27 @@ export function simulateRace(
       kindEnd = prepared.realisedEnd[lap]!;
     }
 
+    if (sampled) {
+      // A car's risk depends on where it runs as the lap begins, front (-0.5) to back (+0.5).
+      let running = 0;
+      for (let i = 0; i < n; i++) running += ws.alive[i]!;
+      let place = 0;
+      for (let r = 0; r < n; r++) {
+        const i = ws.order[r]!;
+        if (!ws.alive[i]) continue;
+        const share = running > 1 ? place / (running - 1) - 0.5 : 0;
+        ws.dnfRisk[i] = rateToP(draw.dnfRate[i]! * Math.exp(draw.dnfPosition * share));
+        place++;
+      }
+    }
+
     const fuel = draw.fuelSPerKg * deg.race_fuel_kg * (1 - (lap - 0.5) / total);
     for (let i = 0; i < n; i++) {
       ws.pitting[i] = 0;
       if (!ws.alive[i]) continue;
       const cell = i * stride + lap;
       const retires = sampled
-        ? random.dnf[cell]! < rateToP(draw.dnfRate[i]!)
+        ? random.dnf[cell]! < ws.dnfRisk[i]!
         : prepared.retiredAfter[i] === lap - 1;
       if (retires) {
         ws.alive[i] = 0;
